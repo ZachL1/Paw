@@ -57,20 +57,17 @@ fn hide_window(app: AppHandle) {
     }
 }
 
-/// Send _NET_ACTIVE_WINDOW X11 client message to force focus.
-/// This is the only fully reliable way to activate a window on X11.
+/// Force-activate a window on X11 using _NET_ACTIVE_WINDOW + XSetInputFocus.
 fn x11_activate_window(gtk_window: &gtk::ApplicationWindow) {
     use gdk::prelude::*;
     use gtk::prelude::*;
 
     if let Some(gdk_window) = gtk_window.window() {
-        // Get the X11 window ID via GDK
         #[cfg(target_os = "linux")]
         unsafe {
             use gdk::ffi::GdkWindow;
             use std::os::raw::c_ulong;
 
-            // gdk_x11_window_get_xid
             extern "C" {
                 fn gdk_x11_window_get_xid(window: *mut GdkWindow) -> c_ulong;
                 fn gdk_x11_get_default_xdisplay() -> *mut x11::xlib::Display;
@@ -82,8 +79,9 @@ fn x11_activate_window(gtk_window: &gtk::ApplicationWindow) {
 
             if !display.is_null() && xid != 0 {
                 let root = x11::xlib::XDefaultRootWindow(display);
-                let screen = x11::xlib::XDefaultScreen(display);
-                let _ = screen;
+
+                // Ensure the window is mapped and raised
+                x11::xlib::XMapRaised(display, xid);
 
                 // Send _NET_ACTIVE_WINDOW client message
                 let atom = x11::xlib::XInternAtom(
@@ -97,9 +95,9 @@ fn x11_activate_window(gtk_window: &gtk::ApplicationWindow) {
                 event.client_message.window = xid;
                 event.client_message.message_type = atom;
                 event.client_message.format = 32;
-                event.client_message.data.set_long(0, 1); // source: application
-                event.client_message.data.set_long(1, 0); // timestamp
-                event.client_message.data.set_long(2, 0); // requestor's active window
+                event.client_message.data.set_long(0, 2); // source: pager/direct
+                event.client_message.data.set_long(1, x11::xlib::CurrentTime as i64);
+                event.client_message.data.set_long(2, 0);
 
                 x11::xlib::XSendEvent(
                     display,
@@ -108,6 +106,15 @@ fn x11_activate_window(gtk_window: &gtk::ApplicationWindow) {
                     x11::xlib::SubstructureRedirectMask | x11::xlib::SubstructureNotifyMask,
                     &mut event,
                 );
+
+                // Also directly set input focus as fallback
+                x11::xlib::XSetInputFocus(
+                    display,
+                    xid,
+                    x11::xlib::RevertToParent,
+                    x11::xlib::CurrentTime,
+                );
+                x11::xlib::XRaiseWindow(display, xid);
                 x11::xlib::XFlush(display);
             }
         }
@@ -122,15 +129,26 @@ fn toggle_window(app: &AppHandle) {
             let _ = window.show();
             let _ = window.set_focus();
 
-            // Use X11 _NET_ACTIVE_WINDOW to reliably steal focus
             if let Ok(gtk_window) = window.gtk_window() {
                 use gtk::prelude::*;
                 gtk_window.set_accept_focus(true);
                 gtk_window.set_keep_above(true);
-                x11_activate_window(&gtk_window);
             }
 
-            // Emit event to frontend so it can focus the search input
+            // Delay X11 activation to ensure window is mapped after show()
+            // Use glib timeout to stay on the main GTK thread
+            let app_handle = app.clone();
+            glib::timeout_add_local_once(
+                std::time::Duration::from_millis(50),
+                move || {
+                    if let Some(w) = app_handle.get_window("main") {
+                        if let Ok(gtk_window) = w.gtk_window() {
+                            x11_activate_window(&gtk_window);
+                        }
+                    }
+                },
+            );
+
             let _ = window.emit("window-shown", ());
         }
     }

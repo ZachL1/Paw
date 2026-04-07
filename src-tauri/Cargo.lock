@@ -429,6 +429,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "gdk",
+ "glib",
  "gtk",
  "log",
  "rusqlite",
