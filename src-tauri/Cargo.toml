@@ -8,10 +8,6 @@ tauri-build = { version = "1", features = [] }
 
 [dependencies]
 tauri = { version = "1", features = [ "global-shortcut-all", "window-hide", "window-close", "window-show", "window-set-skip-taskbar", "window-minimize", "window-set-focus", "window-set-always-on-top", "shell-open", "system-tray", "global-shortcut"] }
-gtk = "0.15"
-gdk = "0.15"
-glib = "0.15"
-x11 = { version = "2.21", features = ["xlib"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.33", features = ["bundled"] }

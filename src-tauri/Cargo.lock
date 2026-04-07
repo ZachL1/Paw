@@ -428,16 +428,12 @@ dependencies = [
  "chrono",
  "dirs",
  "env_logger",
- "gdk",
- "glib",
- "gtk",
  "log",
  "rusqlite",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
- "x11",
 ]
 
 [[package]]
