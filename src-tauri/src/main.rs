@@ -7,11 +7,14 @@ use database::Database;
 use clipboard::ClipboardMonitor;
 use models::HistoryItem;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
     SystemTray, SystemTrayEvent, SystemTrayMenu,
 };
+
+static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 fn get_history(state: tauri::State<'_, Arc<Database>>) -> Result<Vec<HistoryItem>, String> {
@@ -39,9 +42,7 @@ fn paste_item(
         .map_err(|e| e.to_string())?
         .ok_or("Item not found")?;
 
-    if let Some(window) = app.get_window("main") {
-        let _ = window.hide();
-    }
+    do_hide(&app);
 
     std::thread::sleep(std::time::Duration::from_millis(150));
     paste::paste_content(&content).map_err(|e| e.to_string())
@@ -49,41 +50,55 @@ fn paste_item(
 
 #[tauri::command]
 fn hide_window(app: AppHandle) {
+    do_hide(&app);
+}
+
+fn do_hide(app: &AppHandle) {
+    WINDOW_VISIBLE.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_window("main") {
         let _ = window.hide();
     }
 }
 
-/// Use xdotool to find the window by PID and activate it.
-/// This is safe and works reliably across X11 window managers.
-fn focus_window_by_pid(pid: u32) {
-    let _ = std::process::Command::new("xdotool")
-        .args([
-            "search", "--pid", &pid.to_string(),
-            "--onlyvisible",
-            "windowactivate", "--sync",
-            "windowfocus", "--sync",
-        ])
-        .output();
+fn do_show(app: &AppHandle) {
+    if let Some(window) = app.get_window("main") {
+        WINDOW_VISIBLE.store(true, Ordering::SeqCst);
+        let _ = window.show();
+        let _ = window.set_focus();
+
+        // Use xdotool with --name search + longer delay for reliable focus
+        std::thread::spawn(|| {
+            // Wait for the window to be fully mapped
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            // Try multiple strategies
+            let output = std::process::Command::new("xdotool")
+                .args(["search", "--name", "CopyX"])
+                .output();
+            if let Ok(out) = output {
+                let ids = String::from_utf8_lossy(&out.stdout);
+                if let Some(wid) = ids.lines().last() {
+                    let wid = wid.trim();
+                    if !wid.is_empty() {
+                        let _ = std::process::Command::new("xdotool")
+                            .args(["windowactivate", "--sync", wid])
+                            .output();
+                        let _ = std::process::Command::new("xdotool")
+                            .args(["windowfocus", "--sync", wid])
+                            .output();
+                    }
+                }
+            }
+        });
+
+        let _ = window.emit("window-shown", ());
+    }
 }
 
 fn toggle_window(app: &AppHandle) {
-    if let Some(window) = app.get_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
-        } else {
-            let _ = window.show();
-            let _ = window.set_focus();
-
-            // Wait for window to be mapped, then use xdotool to force focus
-            let pid = std::process::id();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                focus_window_by_pid(pid);
-            });
-
-            let _ = window.emit("window-shown", ());
-        }
+    if WINDOW_VISIBLE.load(Ordering::SeqCst) {
+        do_hide(app);
+    } else {
+        do_show(app);
     }
 }
 
