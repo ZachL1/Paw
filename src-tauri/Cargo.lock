@@ -428,6 +428,7 @@ dependencies = [
  "chrono",
  "dirs",
  "env_logger",
+ "gtk",
  "log",
  "rusqlite",
  "serde",

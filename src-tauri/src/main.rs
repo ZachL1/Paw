@@ -62,16 +62,23 @@ fn toggle_window(app: &AppHandle) {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
         } else {
+            // Use GTK present() BEFORE show — this tells the WM we want focus
+            if let Ok(gtk_window) = window.gtk_window() {
+                use gtk::prelude::*;
+                gtk_window.set_keep_above(true);
+                gtk_window.set_accept_focus(true);
+                gtk_window.set_urgency_hint(true);
+            }
+
             let _ = window.show();
             let _ = window.set_focus();
-            // On Linux, use xdotool to force-activate the window
-            // since some WMs ignore set_focus for non-activated windows
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                let _ = std::process::Command::new("xdotool")
-                    .args(["search", "--name", "CopyX", "windowactivate"])
-                    .output();
-            });
+
+            if let Ok(gtk_window) = window.gtk_window() {
+                use gtk::prelude::*;
+                gtk_window.present();
+                gtk_window.set_urgency_hint(false);
+            }
+
             // Emit event to frontend so it can focus the search input
             let _ = window.emit("window-shown", ());
         }
