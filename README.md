@@ -1,10 +1,21 @@
 # CopyX 📋
 
-A lightweight, keyboard-first clipboard manager for Linux (and cross-platform). Inspired by [Maccy](https://github.com/p0deje/Maccy).
+A lightweight, keyboard-first clipboard manager built for true cross-platform support. Inspired by [Maccy](https://github.com/p0deje/Maccy).
 
 Built with **Tauri + Rust + React + TypeScript**.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| 🐧 Linux (X11) | ✅ Supported | Primary development platform |
+| 🐧 Linux (Wayland) | 🟡 Partial | Paste via wtype/ydotool |
+| 🍎 macOS | 🔲 Planned | |
+| 🪟 Windows | 🔲 Planned | |
+| 📱 iOS | 🔲 Exploring | |
+| 🤖 Android | 🔲 Exploring | |
 
 ## Features
 
@@ -145,6 +156,60 @@ CopyX
 ## Acknowledgements
 
 CopyX is inspired by [Maccy](https://github.com/p0deje/Maccy), an excellent clipboard manager for macOS by Alex Rodionov. While CopyX shares no code with Maccy (different language, framework, and platform), its UX design — keyboard-first navigation, instant search, floating panel — is modeled after Maccy's elegant approach.
+
+## Roadmap
+
+### 🖥️ Cross-Platform Desktop
+
+- [ ] **macOS support** — native `.dmg` packaging, `Cmd+V` paste simulation via AppleScript/CGEvent, native window focus handling, menu bar tray icon
+- [ ] **Windows support** — `.msi`/`.exe` installer, `SendInput` API for paste simulation, Win32 focus management, system tray integration
+- [ ] **Wayland full support** — improve paste simulation, window focus and positioning under Wayland compositors
+
+### 🖼️ Rich Content Support
+
+- [ ] **Image clipboard** — detect and store copied images (PNG/JPEG), show thumbnails in history list, full preview in preview panel
+- [ ] **Rich text / HTML** — preserve formatting when copying from browsers and editors
+- [ ] **File references** — track copied file paths, show file icon and name
+- [ ] **Color values** — detect hex/rgb color codes and show color swatches
+- [ ] **Code snippets** — syntax highlighting in preview panel
+
+### 📱 Mobile Platforms
+
+- [ ] **iOS app** — clipboard history via App Extensions and Background Tasks (iOS clipboard access is restricted — explore Share Extension and Shortcuts integration)
+- [ ] **Android app** — clipboard listener service, floating overlay UI, Accessibility Service for paste simulation
+
+### 🔄 Cross-Device Sync
+
+- [ ] **Cloud sync** — encrypted clipboard history sync across devices (E2E encrypted, user-controlled)
+- [ ] **LAN sync** — peer-to-peer sync on the same network without cloud dependency (mDNS discovery + TLS)
+- [ ] **Universal clipboard** — copy on one device, paste on another (like Apple's Handoff, but cross-platform)
+
+### ✨ Enhanced UX
+
+- [ ] **Snippets / templates** — save reusable text templates with variables (e.g., email templates, code boilerplate)
+- [ ] **Collections / folders** — organize pinned items into named groups
+- [ ] **Smart paste** — auto-format when pasting (e.g., strip formatting, trim whitespace, URL encode)
+- [ ] **Quick actions** — transform clipboard content (uppercase, lowercase, base64, JSON format, markdown → HTML)
+- [ ] **Tagging & labels** — tag items for better organization and search
+- [ ] **Statistics** — clipboard usage analytics (most copied items, daily stats)
+
+### 🔧 Developer Features
+
+- [ ] **CLI tool** — `copyx list`, `copyx search`, `copyx paste` for terminal workflows
+- [ ] **API / plugin system** — allow third-party integrations and automation
+- [ ] **Regex search** — advanced search with regex patterns
+- [ ] **Webhooks** — trigger actions on clipboard events
+
+### 🎨 Theming & Polish
+
+- [ ] **Light / dark / auto theme** — follow system appearance
+- [ ] **Custom themes** — user-defined color schemes
+- [ ] **Custom CSS** — advanced users can inject custom styles
+- [ ] **Localization (i18n)** — multi-language support
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
