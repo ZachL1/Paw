@@ -95,7 +95,7 @@ sudo apt install libwebkit2gtk-4.0-dev libgtk-3-0 libayatana-appindicator3-dev l
 ### Build
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/CopyX.git
+git clone https://github.com/ZachL1/CopyX.git
 cd CopyX
 npm install
 npm run tauri build
