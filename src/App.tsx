@@ -22,6 +22,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -34,11 +35,19 @@ function App() {
 
   useEffect(() => {
     loadHistory();
-    const unlisten = listen("clipboard-changed", () => {
+    const unlistenClipboard = listen("clipboard-changed", () => {
       loadHistory();
     });
+    // When window is shown via hotkey, force focus into the app
+    const unlistenShown = listen("window-shown", () => {
+      loadHistory();
+      setTimeout(() => {
+        containerRef.current?.focus();
+      }, 50);
+    });
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenClipboard.then((fn) => fn());
+      unlistenShown.then((fn) => fn());
     };
   }, [loadHistory]);
 
@@ -126,7 +135,9 @@ function App() {
 
   return (
     <div
-      className="glass-bg h-full flex flex-col rounded-lg border border-white/10"
+      ref={containerRef}
+      tabIndex={-1}
+      className="glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none"
       onKeyDown={handleKeyDown}
     >
       <SearchBar

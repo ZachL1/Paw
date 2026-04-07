@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 
 interface SearchBarProps {
   query: string;
@@ -10,8 +11,16 @@ function SearchBar({ query, onQueryChange, itemCount }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Auto-focus search on mount
     inputRef.current?.focus();
+    // Re-focus search input whenever window is shown
+    const unlisten = listen("window-shown", () => {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   return (

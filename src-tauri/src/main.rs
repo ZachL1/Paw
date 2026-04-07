@@ -9,7 +9,8 @@ use models::HistoryItem;
 
 use std::sync::Arc;
 use tauri::{
-    AppHandle, GlobalShortcutManager, Manager, SystemTray, SystemTrayEvent,
+    AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
+    SystemTray, SystemTrayEvent, SystemTrayMenu,
 };
 
 #[tauri::command]
@@ -63,6 +64,16 @@ fn toggle_window(app: &AppHandle) {
         } else {
             let _ = window.show();
             let _ = window.set_focus();
+            // On Linux, use xdotool to force-activate the window
+            // since some WMs ignore set_focus for non-activated windows
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let _ = std::process::Command::new("xdotool")
+                    .args(["search", "--name", "CopyX", "windowactivate"])
+                    .output();
+            });
+            // Emit event to frontend so it can focus the search input
+            let _ = window.emit("window-shown", ());
         }
     }
 }
@@ -70,14 +81,23 @@ fn toggle_window(app: &AppHandle) {
 fn main() {
     env_logger::init();
 
-    let tray = SystemTray::new();
+    let tray_menu = SystemTrayMenu::new()
+        .add_item(CustomMenuItem::new("toggle", "Show/Hide"))
+        .add_item(CustomMenuItem::new("quit", "Quit"));
+    let tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
         .system_tray(tray)
-        .on_system_tray_event(|app, event| {
-            if let SystemTrayEvent::LeftClick { .. } = event {
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick { .. } => {
                 toggle_window(app);
             }
+            SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                "toggle" => toggle_window(app),
+                "quit" => std::process::exit(0),
+                _ => {}
+            },
+            _ => {}
         })
         .setup(|app| {
             let db = Arc::new(Database::new().expect("Failed to initialize database"));
