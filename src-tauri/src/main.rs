@@ -8,6 +8,7 @@ use config::AppConfig;
 use database::Database;
 use clipboard::ClipboardMonitor;
 use models::HistoryItem;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -39,15 +40,57 @@ fn paste_item(
     app: AppHandle,
     state: tauri::State<'_, Arc<Database>>,
 ) -> Result<(), String> {
-    let content = state
-        .get_content_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or("Item not found")?;
+    let content_type = state.get_content_type(id).map_err(|e| e.to_string())?;
 
     do_hide(&app);
-
     std::thread::sleep(std::time::Duration::from_millis(150));
-    paste::paste_content(&content).map_err(|e| e.to_string())
+
+    if content_type == "image" {
+        // Get image blob, write to clipboard as image, then paste
+        let blob = state
+            .get_image_blob(id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Image data not found")?;
+
+        // Decode PNG to RGBA and set on clipboard
+        use image::ImageReader;
+        use std::io::Cursor;
+        let img = ImageReader::new(Cursor::new(&blob))
+            .with_guessed_format()
+            .map_err(|e| e.to_string())?
+            .decode()
+            .map_err(|e| e.to_string())?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+
+        // Suppress the monitor from picking this up
+        if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
+            monitor.suppress_next();
+        }
+
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard
+            .set_image(arboard::ImageData {
+                width: w as usize,
+                height: h as usize,
+                bytes: rgba.into_raw().into(),
+            })
+            .map_err(|e| e.to_string())?;
+
+        paste::paste_content("").map_err(|e| e.to_string())
+    } else {
+        let content = state
+            .get_content_by_id(id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Item not found")?;
+
+        // Suppress the monitor from picking this up
+        if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
+            monitor.suppress_next();
+        }
+
+        paste::paste_content(&content).map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -57,10 +100,20 @@ fn toggle_pin(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<bool, S
 
 #[tauri::command]
 fn get_item_content(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<String, String> {
-    state
-        .get_content_by_id(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Item not found".to_string())
+    let content_type = state.get_content_type(id).map_err(|e| e.to_string())?;
+    if content_type == "image" {
+        // Return base64-encoded PNG for image items
+        let blob = state
+            .get_image_blob(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Image data not found".to_string())?;
+        Ok(format!("data:image/png;base64,{}", BASE64.encode(&blob)))
+    } else {
+        state
+            .get_content_by_id(id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Item not found".to_string())
+    }
 }
 
 #[tauri::command]

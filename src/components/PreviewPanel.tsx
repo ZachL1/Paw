@@ -29,9 +29,17 @@ function PreviewPanel({ item, content }: PreviewPanelProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        <pre className="text-white/80 text-xs whitespace-pre-wrap break-all font-mono leading-relaxed">
-          {content || item.title}
-        </pre>
+        {item.content_type === "image" && content?.startsWith("data:image/") ? (
+          <img
+            src={content}
+            alt="clipboard image"
+            className="max-w-full rounded"
+          />
+        ) : (
+          <pre className="text-white/80 text-xs whitespace-pre-wrap break-all font-mono leading-relaxed">
+            {content || item.title}
+          </pre>
+        )}
       </div>
 
       {/* Footer hints */}

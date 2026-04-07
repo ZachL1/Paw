@@ -69,12 +69,20 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
               <span className="text-amber-400 text-xs flex-shrink-0">📌</span>
             )}
 
-            {/* Content type icon */}
-            <span className="text-white/30 text-xs flex-shrink-0 w-4 text-center">
-              {item.content_type === "image" && "🖼"}
-              {item.content_type === "file" && "📁"}
-              {item.content_type === "text" && ""}
-            </span>
+            {/* Content type icon / thumbnail */}
+            {item.content_type === "image" && item.thumbnail ? (
+              <img
+                src={`data:image/png;base64,${item.thumbnail}`}
+                alt="clipboard image"
+                className="w-8 h-6 object-cover rounded flex-shrink-0"
+              />
+            ) : (
+              <span className="text-white/30 text-xs flex-shrink-0 w-4 text-center">
+                {item.content_type === "image" && "🖼"}
+                {item.content_type === "file" && "📁"}
+                {item.content_type === "text" && ""}
+              </span>
+            )}
 
             {/* Title */}
             <span className="text-white/90 text-sm truncate flex-1 leading-snug">

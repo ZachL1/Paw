@@ -18,6 +18,7 @@ export interface HistoryItem {
   last_copied_at: string;
   copy_count: number;
   is_pinned: boolean;
+  thumbnail: string | null;
 }
 
 function App() {

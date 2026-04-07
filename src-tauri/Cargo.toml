@@ -16,6 +16,9 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"
 log = "0.4"
 env_logger = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+base64 = "0.22"
+sha2 = "0.10"
 
 [features]
 default = ["custom-protocol"]

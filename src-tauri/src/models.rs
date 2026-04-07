@@ -11,4 +11,6 @@ pub struct HistoryItem {
     pub last_copied_at: String,
     pub copy_count: i64,
     pub is_pinned: bool,
+    #[serde(skip_deserializing)]
+    pub thumbnail: Option<String>,
 }
