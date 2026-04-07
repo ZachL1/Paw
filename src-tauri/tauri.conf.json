@@ -1,0 +1,68 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "CopyX",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "globalShortcut": {
+        "all": true
+      },
+      "window": {
+        "all": false,
+        "close": true,
+        "hide": true,
+        "show": true,
+        "minimize": true,
+        "setFocus": true,
+        "setAlwaysOnTop": true,
+        "setSkipTaskbar": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.copyx.app",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.png"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "CopyX",
+        "label": "main",
+        "width": 400,
+        "height": 500,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "center": true
+      }
+    ],
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  }
+}

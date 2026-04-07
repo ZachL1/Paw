@@ -1,0 +1,29 @@
+{
+  "name": "copyx",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "tauri": "tauri"
+  },
+  "description": "Cross-platform clipboard manager inspired by Maccy",
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@tauri-apps/cli": "^1.6.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.6.0",
+    "fuse.js": "^7.3.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zustand": "^5.0.12"
+  }
+}
