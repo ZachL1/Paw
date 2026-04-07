@@ -1,14 +1,16 @@
 mod clipboard;
+mod config;
 mod database;
 mod models;
 mod paste;
 
+use config::AppConfig;
 use database::Database;
 use clipboard::ClipboardMonitor;
 use models::HistoryItem;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
     SystemTray, SystemTrayEvent, SystemTrayMenu,
@@ -62,6 +64,39 @@ fn get_item_content(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<S
 }
 
 #[tauri::command]
+fn get_config(state: tauri::State<'_, Arc<Mutex<AppConfig>>>) -> Result<AppConfig, String> {
+    Ok(state.lock().unwrap().clone())
+}
+
+#[tauri::command]
+fn save_config(
+    new_config: AppConfig,
+    app: AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
+) -> Result<(), String> {
+    let old_hotkey = {
+        let mut config = state.lock().unwrap();
+        let old = config.hotkey.clone();
+        *config = new_config.clone();
+        config.save().map_err(|e| e.to_string())?;
+        old
+    };
+
+    // Re-register hotkey if changed
+    if old_hotkey != new_config.hotkey {
+        let mut gsm = app.global_shortcut_manager();
+        let _ = gsm.unregister(&old_hotkey);
+        let app_handle = app.clone();
+        gsm.register(&new_config.hotkey, move || {
+            toggle_window(&app_handle);
+        })
+        .map_err(|e| format!("Invalid hotkey: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn hide_window(app: AppHandle) {
     do_hide(&app);
 }
@@ -79,11 +114,8 @@ fn do_show(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
 
-        // Use xdotool with --name search + longer delay for reliable focus
         std::thread::spawn(|| {
-            // Wait for the window to be fully mapped
             std::thread::sleep(std::time::Duration::from_millis(150));
-            // Try multiple strategies
             let output = std::process::Command::new("xdotool")
                 .args(["search", "--name", "CopyX"])
                 .output();
@@ -118,10 +150,15 @@ fn toggle_window(app: &AppHandle) {
 fn main() {
     env_logger::init();
 
+    let config = Arc::new(Mutex::new(AppConfig::load()));
+
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle", "Show/Hide"))
+        .add_item(CustomMenuItem::new("settings", "Settings"))
         .add_item(CustomMenuItem::new("quit", "Quit"));
     let tray = SystemTray::new().with_menu(tray_menu);
+
+    let hotkey = config.lock().unwrap().hotkey.clone();
 
     tauri::Builder::default()
         .system_tray(tray)
@@ -131,12 +168,22 @@ fn main() {
             }
             SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
                 "toggle" => toggle_window(app),
+                "settings" => {
+                    // Emit event to show settings in the frontend
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.emit("show-settings", ());
+                    }
+                }
                 "quit" => std::process::exit(0),
                 _ => {}
             },
             _ => {}
         })
-        .setup(|app| {
+        .setup(move |app| {
+            app.manage(config.clone());
+
             let db = Arc::new(Database::new().expect("Failed to initialize database"));
             app.manage(db.clone());
 
@@ -149,7 +196,7 @@ fn main() {
 
             let app_handle = app.handle().clone();
             app.global_shortcut_manager()
-                .register("Alt+V", move || {
+                .register(&hotkey, move || {
                     toggle_window(&app_handle);
                 })
                 .expect("Failed to register global shortcut");
@@ -163,6 +210,8 @@ fn main() {
             paste_item,
             toggle_pin,
             get_item_content,
+            get_config,
+            save_config,
             hide_window,
         ])
         .run(tauri::generate_context!())

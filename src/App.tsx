@@ -5,6 +5,7 @@ import Fuse from "fuse.js";
 import SearchBar from "./components/SearchBar";
 import HistoryList from "./components/HistoryList";
 import PreviewPanel from "./components/PreviewPanel";
+import SettingsView from "./components/SettingsView";
 import Footer from "./components/Footer";
 
 export interface HistoryItem {
@@ -25,6 +26,7 @@ function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -47,13 +49,18 @@ function App() {
       setQuery("");
       setSelectedIndex(0);
       setShowPreview(false);
+      setShowSettings(false);
       setTimeout(() => {
         containerRef.current?.focus();
       }, 50);
     });
+    const unlistenSettings = listen("show-settings", () => {
+      setShowSettings(true);
+    });
     return () => {
       unlistenClipboard.then((fn) => fn());
       unlistenShown.then((fn) => fn());
+      unlistenSettings.then((fn) => fn());
     };
   }, [loadHistory]);
 
@@ -176,6 +183,10 @@ function App() {
             handleDelete(filteredItems[selectedIndex].id);
           }
           break;
+        case e.key === "," && e.ctrlKey:
+          e.preventDefault();
+          setShowSettings((s) => !s);
+          break;
       }
     },
     [filteredItems, selectedIndex, handleSelect, handleDelete, handleTogglePin, showPreview]
@@ -200,37 +211,41 @@ function App() {
         <div className="w-8 h-1 rounded-full bg-white/20" />
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Main panel */}
-        <div className="flex flex-col flex-1 min-w-0">
-          <SearchBar
-            query={query}
-            onQueryChange={setQuery}
-            itemCount={filteredItems.length}
-          />
-          <HistoryList
-            ref={listRef}
-            items={filteredItems}
-            selectedIndex={selectedIndex}
-            onSelect={handleSelect}
-            onDelete={handleDelete}
-            onTogglePin={handleTogglePin}
-          />
-          <Footer
-            itemCount={filteredItems.length}
-            onClearAll={handleClearAll}
-            showPreview={showPreview}
-          />
-        </div>
+      {showSettings ? (
+        <SettingsView onClose={() => setShowSettings(false)} />
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          {/* Main panel */}
+          <div className="flex flex-col flex-1 min-w-0">
+            <SearchBar
+              query={query}
+              onQueryChange={setQuery}
+              itemCount={filteredItems.length}
+            />
+            <HistoryList
+              ref={listRef}
+              items={filteredItems}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelect}
+              onDelete={handleDelete}
+              onTogglePin={handleTogglePin}
+            />
+            <Footer
+              itemCount={filteredItems.length}
+              onClearAll={handleClearAll}
+              showPreview={showPreview}
+            />
+          </div>
 
-        {/* Preview panel */}
-        {showPreview && (
-          <PreviewPanel
-            item={filteredItems[selectedIndex] || null}
-            content={previewContent}
-          />
-        )}
-      </div>
+          {/* Preview panel */}
+          {showPreview && (
+            <PreviewPanel
+              item={filteredItems[selectedIndex] || null}
+              content={previewContent}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
