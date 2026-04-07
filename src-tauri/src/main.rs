@@ -136,7 +136,7 @@ fn main() {
 
             let app_handle = app.handle().clone();
             app.global_shortcut_manager()
-                .register("CmdOrCtrl+Shift+C", move || {
+                .register("Alt+V", move || {
                     toggle_window(&app_handle);
                 })
                 .expect("Failed to register global shortcut");

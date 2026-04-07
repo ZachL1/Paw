@@ -140,6 +140,13 @@ function App() {
       className="glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none"
       onKeyDown={handleKeyDown}
     >
+      {/* Drag handle */}
+      <div
+        data-tauri-drag-region
+        className="h-5 flex-shrink-0 flex items-center justify-center cursor-move"
+      >
+        <div className="w-8 h-1 rounded-full bg-white/20" />
+      </div>
       <SearchBar
         query={query}
         onQueryChange={setQuery}
