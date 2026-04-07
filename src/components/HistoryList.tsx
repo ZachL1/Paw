@@ -6,13 +6,23 @@ interface HistoryListProps {
   selectedIndex: number;
   onSelect: (item: HistoryItem) => void;
   onDelete: (id: number) => void;
+  onTogglePin: (id: number) => void;
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr + "Z");
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
 }
 
 const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
-  ({ items, selectedIndex, onSelect, onDelete }, ref) => {
+  ({ items, selectedIndex, onSelect, onDelete, onTogglePin }, ref) => {
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-    // Scroll selected item into view
     useEffect(() => {
       itemRefs.current[selectedIndex]?.scrollIntoView({
         block: "nearest",
@@ -26,7 +36,11 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
           ref={ref}
           className="flex-1 flex items-center justify-center text-white/30 text-sm"
         >
-          No clipboard history
+          <div className="text-center">
+            <div className="text-2xl mb-2">📋</div>
+            <div>No clipboard history</div>
+            <div className="text-xs mt-1">Copy something to get started</div>
+          </div>
         </div>
       );
     }
@@ -40,45 +54,55 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
               itemRefs.current[index] = el;
             }}
             className={`
-              px-3 py-1.5 mx-1 rounded cursor-pointer flex items-center gap-2
+              group px-3 py-1.5 mx-1 rounded cursor-pointer flex items-center gap-2
               transition-colors duration-75
               ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
             `}
             onClick={() => onSelect(item)}
-            onContextMenu={(e) => {
+            onDoubleClick={(e) => {
               e.preventDefault();
-              onDelete(item.id);
+              onTogglePin(item.id);
             }}
           >
             {/* Pin indicator */}
             {item.is_pinned && (
-              <span className="text-yellow-400 text-xs flex-shrink-0">📌</span>
+              <span className="text-amber-400 text-xs flex-shrink-0">📌</span>
             )}
 
             {/* Content type icon */}
-            <span className="text-white/30 text-xs flex-shrink-0">
-              {item.content_type === "image" ? "🖼" : ""}
-              {item.content_type === "file" ? "📁" : ""}
+            <span className="text-white/30 text-xs flex-shrink-0 w-4 text-center">
+              {item.content_type === "image" && "🖼"}
+              {item.content_type === "file" && "📁"}
+              {item.content_type === "text" && ""}
             </span>
 
             {/* Title */}
-            <span className="text-white/90 text-sm truncate flex-1">
-              {item.title}
+            <span className="text-white/90 text-sm truncate flex-1 leading-snug">
+              {item.title || "(empty)"}
             </span>
 
-            {/* Source app */}
-            {item.source_app && (
-              <span className="text-white/20 text-xs flex-shrink-0 truncate max-w-[80px]">
-                {item.source_app}
-              </span>
-            )}
+            {/* Time ago */}
+            <span className="text-white/20 text-xs flex-shrink-0">
+              {timeAgo(item.last_copied_at)}
+            </span>
 
-            {/* Copy count */}
+            {/* Copy count badge */}
             {item.copy_count > 1 && (
-              <span className="text-white/20 text-xs flex-shrink-0">
+              <span className="text-white/20 text-[10px] bg-white/5 px-1 rounded flex-shrink-0">
                 ×{item.copy_count}
               </span>
             )}
+
+            {/* Delete button (visible on hover) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item.id);
+              }}
+              className="text-white/0 group-hover:text-white/30 hover:!text-red-400 text-xs flex-shrink-0 transition-colors"
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>

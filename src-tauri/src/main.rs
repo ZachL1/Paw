@@ -49,6 +49,19 @@ fn paste_item(
 }
 
 #[tauri::command]
+fn toggle_pin(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<bool, String> {
+    state.toggle_pin(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_item_content(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<String, String> {
+    state
+        .get_content_by_id(id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Item not found".to_string())
+}
+
+#[tauri::command]
 fn hide_window(app: AppHandle) {
     do_hide(&app);
 }
@@ -148,6 +161,8 @@ fn main() {
             delete_item,
             clear_history,
             paste_item,
+            toggle_pin,
+            get_item_content,
             hide_window,
         ])
         .run(tauri::generate_context!())

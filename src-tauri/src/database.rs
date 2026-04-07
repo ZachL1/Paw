@@ -109,6 +109,21 @@ impl Database {
         Ok(items)
     }
 
+    pub fn toggle_pin(&self, id: i64) -> Result<bool, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let is_pinned: bool = conn.query_row(
+            "SELECT is_pinned FROM history_items WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
+        let new_state = !is_pinned;
+        conn.execute(
+            "UPDATE history_items SET is_pinned = ?1 WHERE id = ?2",
+            params![new_state, id],
+        )?;
+        Ok(new_state)
+    }
+
     pub fn get_content_by_id(
         &self,
         id: i64,

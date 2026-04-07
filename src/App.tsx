@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
+import Fuse from "fuse.js";
 import SearchBar from "./components/SearchBar";
 import HistoryList from "./components/HistoryList";
+import PreviewPanel from "./components/PreviewPanel";
 import Footer from "./components/Footer";
 
 export interface HistoryItem {
@@ -21,6 +23,8 @@ function App() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -38,9 +42,11 @@ function App() {
     const unlistenClipboard = listen("clipboard-changed", () => {
       loadHistory();
     });
-    // When window is shown via hotkey, force focus into the app
     const unlistenShown = listen("window-shown", () => {
       loadHistory();
+      setQuery("");
+      setSelectedIndex(0);
+      setShowPreview(false);
       setTimeout(() => {
         containerRef.current?.focus();
       }, 50);
@@ -51,22 +57,39 @@ function App() {
     };
   }, [loadHistory]);
 
-  const filteredItems = items.filter((item) => {
-    if (!query) return true;
-    const lowerQuery = query.toLowerCase();
-    return item.title.toLowerCase().includes(lowerQuery);
-  });
-
-  const handleSelect = useCallback(
-    async (item: HistoryItem) => {
-      try {
-        await invoke("paste_item", { id: item.id });
-      } catch (e) {
-        console.error("Failed to paste:", e);
-      }
-    },
-    []
+  // Fuzzy search with Fuse.js
+  const fuse = useRef(
+    new Fuse<HistoryItem>([], {
+      keys: ["title"],
+      threshold: 0.4,
+      includeScore: true,
+    })
   );
+
+  useEffect(() => {
+    fuse.current.setCollection(items);
+  }, [items]);
+
+  const filteredItems = query
+    ? fuse.current.search(query).map((r) => r.item)
+    : items;
+
+  // Load preview content when selection changes
+  useEffect(() => {
+    if (showPreview && filteredItems[selectedIndex]) {
+      invoke<string>("get_item_content", { id: filteredItems[selectedIndex].id })
+        .then(setPreviewContent)
+        .catch(() => setPreviewContent(null));
+    }
+  }, [selectedIndex, showPreview, filteredItems]);
+
+  const handleSelect = useCallback(async (item: HistoryItem) => {
+    try {
+      await invoke("paste_item", { id: item.id });
+    } catch (e) {
+      console.error("Failed to paste:", e);
+    }
+  }, []);
 
   const handleDelete = useCallback(
     async (id: number) => {
@@ -75,6 +98,18 @@ function App() {
         await loadHistory();
       } catch (e) {
         console.error("Failed to delete:", e);
+      }
+    },
+    [loadHistory]
+  );
+
+  const handleTogglePin = useCallback(
+    async (id: number) => {
+      try {
+        await invoke("toggle_pin", { id });
+        await loadHistory();
+      } catch (e) {
+        console.error("Failed to toggle pin:", e);
       }
     },
     [loadHistory]
@@ -110,12 +145,30 @@ function App() {
           break;
         case e.key === "Escape":
           e.preventDefault();
-          invoke("hide_window");
+          if (showPreview) {
+            setShowPreview(false);
+          } else {
+            invoke("hide_window");
+          }
           break;
         case e.ctrlKey && e.key === "u":
           e.preventDefault();
           setQuery("");
           setSelectedIndex(0);
+          break;
+        case e.key === "ArrowRight":
+          e.preventDefault();
+          setShowPreview(true);
+          break;
+        case e.key === "ArrowLeft":
+          e.preventDefault();
+          setShowPreview(false);
+          break;
+        case e.altKey && e.key === "p":
+          e.preventDefault();
+          if (filteredItems[selectedIndex]) {
+            handleTogglePin(filteredItems[selectedIndex].id);
+          }
           break;
         case e.key === "Delete" && e.altKey:
           e.preventDefault();
@@ -125,10 +178,9 @@ function App() {
           break;
       }
     },
-    [filteredItems, selectedIndex, handleSelect, handleDelete]
+    [filteredItems, selectedIndex, handleSelect, handleDelete, handleTogglePin, showPreview]
   );
 
-  // Reset selection when query changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
@@ -137,7 +189,7 @@ function App() {
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none"
+      className="glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none overflow-hidden"
       onKeyDown={handleKeyDown}
     >
       {/* Drag handle */}
@@ -147,19 +199,38 @@ function App() {
       >
         <div className="w-8 h-1 rounded-full bg-white/20" />
       </div>
-      <SearchBar
-        query={query}
-        onQueryChange={setQuery}
-        itemCount={filteredItems.length}
-      />
-      <HistoryList
-        ref={listRef}
-        items={filteredItems}
-        selectedIndex={selectedIndex}
-        onSelect={handleSelect}
-        onDelete={handleDelete}
-      />
-      <Footer itemCount={filteredItems.length} onClearAll={handleClearAll} />
+
+      <div className="flex flex-1 min-h-0">
+        {/* Main panel */}
+        <div className="flex flex-col flex-1 min-w-0">
+          <SearchBar
+            query={query}
+            onQueryChange={setQuery}
+            itemCount={filteredItems.length}
+          />
+          <HistoryList
+            ref={listRef}
+            items={filteredItems}
+            selectedIndex={selectedIndex}
+            onSelect={handleSelect}
+            onDelete={handleDelete}
+            onTogglePin={handleTogglePin}
+          />
+          <Footer
+            itemCount={filteredItems.length}
+            onClearAll={handleClearAll}
+            showPreview={showPreview}
+          />
+        </div>
+
+        {/* Preview panel */}
+        {showPreview && (
+          <PreviewPanel
+            item={filteredItems[selectedIndex] || null}
+            content={previewContent}
+          />
+        )}
+      </div>
     </div>
   );
 }
