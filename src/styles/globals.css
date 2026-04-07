@@ -17,9 +17,11 @@ body,
     sans-serif;
 }
 
-/* Dark background (solid, no transparency needed) */
+/* Glassmorphism background */
 .glass-bg {
-  background: #1e1e2e;
+  background: rgba(30, 30, 46, var(--bg-opacity));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* Custom scrollbar */

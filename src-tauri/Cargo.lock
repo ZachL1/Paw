@@ -428,6 +428,7 @@ dependencies = [
  "chrono",
  "dirs",
  "env_logger",
+ "gdk",
  "gtk",
  "log",
  "rusqlite",
@@ -435,6 +436,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "x11",
 ]
 
 [[package]]
