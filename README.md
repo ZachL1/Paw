@@ -1,4 +1,4 @@
-# CopyX 📋
+# Paw 📋
 
 A lightweight, keyboard-first clipboard manager built for true cross-platform support. Inspired by [Maccy](https://github.com/p0deje/Maccy).
 
@@ -34,7 +34,7 @@ Built with **Tauri + Rust + React + TypeScript**.
 
 ```bash
 # Download the latest .deb from Releases
-sudo dpkg -i copy-x_0.1.0_amd64.deb
+sudo dpkg -i paw_0.1.0_amd64.deb
 sudo apt-get install -f  # install dependencies if needed
 
 # Required for paste simulation
@@ -44,30 +44,30 @@ sudo apt install xdotool
 ### AppImage (any Linux)
 
 ```bash
-chmod +x copy-x_0.1.0_amd64.AppImage
-./copy-x_0.1.0_amd64.AppImage
+chmod +x paw_0.1.0_amd64.AppImage
+./paw_0.1.0_amd64.AppImage
 ```
 
 ### Fedora / RHEL
 
 ```bash
-sudo rpm -i copy-x-0.1.0-1.x86_64.rpm
+sudo rpm -i paw-0.1.0-1.x86_64.rpm
 ```
 
 ## Usage
 
 ### Quick Start
 
-1. Launch `copy-x` — it runs in the system tray
+1. Launch `paw` — it runs in the system tray
 2. Copy some text in any app
-3. Press **`Alt+V`** to open CopyX
+3. Press **`Alt+V`** to open Paw
 4. Type to search, use `↑↓` to navigate, press `Enter` to paste
 
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+V` | Show/hide CopyX (configurable) |
+| `Alt+V` | Show/hide Paw (configurable) |
 | `↑` `↓` / `Ctrl+P` `Ctrl+N` | Navigate up/down |
 | `Enter` | Paste selected item |
 | `Escape` | Close preview / close window |
@@ -80,11 +80,11 @@ sudo rpm -i copy-x-0.1.0-1.x86_64.rpm
 
 ### Settings
 
-Open settings via `Ctrl+,` or the tray menu. Configuration is saved to `~/.config/copyx/config.json`.
+Open settings via `Ctrl+,` or the tray menu. Configuration is saved to `~/.config/paw/config.json`.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Global Hotkey | `Alt+V` | Shortcut to toggle CopyX |
+| Global Hotkey | `Alt+V` | Shortcut to toggle Paw |
 | Max History | 1000 | Maximum items to keep |
 | Auto-clear | Never | Auto-delete items after N days |
 | Poll Interval | 500ms | How often to check clipboard |
@@ -106,8 +106,8 @@ sudo apt install libwebkit2gtk-4.0-dev libgtk-3-0 libayatana-appindicator3-dev l
 ### Build
 
 ```bash
-git clone https://github.com/ZachL1/CopyX.git
-cd CopyX
+git clone https://github.com/ZachL1/Paw.git
+cd Paw
 npm install
 npm run tauri build
 ```
@@ -123,7 +123,7 @@ npm run tauri dev
 ## Architecture
 
 ```
-CopyX
+Paw
 ├── src-tauri/src/        # Rust backend
 │   ├── main.rs           # App entry, Tauri commands, tray, hotkey
 │   ├── clipboard.rs      # Clipboard polling monitor
@@ -155,7 +155,7 @@ CopyX
 
 ## Acknowledgements
 
-CopyX is inspired by [Maccy](https://github.com/p0deje/Maccy), an excellent clipboard manager for macOS by Alex Rodionov. While CopyX shares no code with Maccy (different language, framework, and platform), its UX design — keyboard-first navigation, instant search, floating panel — is modeled after Maccy's elegant approach.
+Paw is inspired by [Maccy](https://github.com/p0deje/Maccy), an excellent clipboard manager for macOS by Alex Rodionov. While Paw shares no code with Maccy (different language, framework, and platform), its UX design — keyboard-first navigation, instant search, floating panel — is modeled after Maccy's elegant approach.
 
 ## Roadmap
 

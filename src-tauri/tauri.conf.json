@@ -7,7 +7,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "CopyX",
+    "productName": "Paw",
     "version": "0.1.0"
   },
   "tauri": {
@@ -35,7 +35,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.copyx.app",
+      "identifier": "com.paw.clipboard",
       "category": "Utility",
       "shortDescription": "Cross-platform clipboard manager",
       "longDescription": "A lightweight clipboard manager inspired by Maccy, with global hotkey, search, and keyboard-first navigation.",
@@ -54,7 +54,7 @@
     },
     "windows": [
       {
-        "title": "CopyX",
+        "title": "Paw",
         "label": "main",
         "width": 400,
         "height": 500,

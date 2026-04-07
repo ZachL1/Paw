@@ -117,7 +117,7 @@ fn do_show(app: &AppHandle) {
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(150));
             let output = std::process::Command::new("xdotool")
-                .args(["search", "--name", "CopyX"])
+                .args(["search", "--name", "Paw"])
                 .output();
             if let Ok(out) = output {
                 let ids = String::from_utf8_lossy(&out.stdout);
@@ -215,5 +215,5 @@ fn main() {
             hide_window,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running CopyX");
+        .expect("error while running Paw");
 }

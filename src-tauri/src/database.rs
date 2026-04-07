@@ -24,7 +24,7 @@ impl Database {
 
     fn db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let data_dir = dirs::data_dir().ok_or("Cannot find data directory")?;
-        Ok(data_dir.join("copyx").join("history.db"))
+        Ok(data_dir.join("paw").join("history.db"))
     }
 
     fn init_tables(&self) -> Result<(), Box<dyn std::error::Error>> {

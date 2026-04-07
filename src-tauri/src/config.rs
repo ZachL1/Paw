@@ -31,7 +31,7 @@ impl Default for AppConfig {
 impl AppConfig {
     fn config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let config_dir = dirs::config_dir().ok_or("Cannot find config directory")?;
-        Ok(config_dir.join("copyx").join("config.json"))
+        Ok(config_dir.join("paw").join("config.json"))
     }
 
     pub fn load() -> Self {
