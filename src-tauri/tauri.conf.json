@@ -28,7 +28,8 @@
         "minimize": true,
         "setFocus": true,
         "setAlwaysOnTop": true,
-        "setSkipTaskbar": true
+        "setSkipTaskbar": true,
+        "startDragging": true
       }
     },
     "bundle": {
