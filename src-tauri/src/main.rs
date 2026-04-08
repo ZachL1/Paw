@@ -40,6 +40,9 @@ fn paste_item(
     app: AppHandle,
     state: tauri::State<'_, Arc<Database>>,
 ) -> Result<(), String> {
+    // Bump last_copied_at so item moves to top of history
+    state.touch_item(id).map_err(|e| e.to_string())?;
+
     let content_type = state.get_content_type(id).map_err(|e| e.to_string())?;
 
     do_hide(&app);

@@ -193,6 +193,16 @@ impl Database {
         Ok(new_state)
     }
 
+    /// Update last_copied_at and increment copy_count (used when pasting from history)
+    pub fn touch_item(&self, id: i64) -> Result<(), Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1 WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
     pub fn get_content_by_id(
         &self,
         id: i64,
