@@ -85,9 +85,23 @@ function App() {
   // Load preview content when selection changes
   useEffect(() => {
     if (showPreview && filteredItems[selectedIndex]) {
-      invoke<string>("get_item_content", { id: filteredItems[selectedIndex].id })
-        .then(setPreviewContent)
-        .catch(() => setPreviewContent(null));
+      const item = filteredItems[selectedIndex];
+      // For images, use thumbnail immediately; full image loads in background
+      if (item.content_type === "image" && item.thumbnail) {
+        setPreviewContent(`data:image/png;base64,${item.thumbnail}`);
+      } else {
+        setPreviewContent(null);
+      }
+      // Fetch full content (text or full-res image)
+      let cancelled = false;
+      invoke<string>("get_item_content", { id: item.id })
+        .then((content) => {
+          if (!cancelled) setPreviewContent(content);
+        })
+        .catch(() => {
+          if (!cancelled) setPreviewContent(null);
+        });
+      return () => { cancelled = true; };
     }
   }, [selectedIndex, showPreview, filteredItems]);
 
