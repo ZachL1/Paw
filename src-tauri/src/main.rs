@@ -77,7 +77,8 @@ fn paste_item(
             })
             .map_err(|e| e.to_string())?;
 
-        paste::paste_content("").map_err(|e| e.to_string())
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        paste::simulate_paste().map_err(|e| e.to_string())
     } else {
         let content = state
             .get_content_by_id(id)
@@ -89,7 +90,7 @@ fn paste_item(
             monitor.suppress_next();
         }
 
-        paste::paste_content(&content).map_err(|e| e.to_string())
+        paste::paste_text(&content).map_err(|e| e.to_string())
     }
 }
 
