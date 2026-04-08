@@ -26,6 +26,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const previewRequestId = useRef(0);
   const [showPreview, setShowPreview] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,22 +87,29 @@ function App() {
   useEffect(() => {
     if (showPreview && filteredItems[selectedIndex]) {
       const item = filteredItems[selectedIndex];
-      // For images, use thumbnail immediately; full image loads in background
-      if (item.content_type === "image" && item.thumbnail) {
-        setPreviewContent(`data:image/png;base64,${item.thumbnail}`);
+      const requestId = ++previewRequestId.current;
+
+      if (item.content_type === "image") {
+        // Use thumbnail directly for image preview — no backend call needed
+        if (item.thumbnail) {
+          setPreviewContent(`data:image/png;base64,${item.thumbnail}`);
+        } else {
+          setPreviewContent(null);
+        }
       } else {
         setPreviewContent(null);
+        invoke<string>("get_item_content", { id: item.id })
+          .then((content) => {
+            if (previewRequestId.current === requestId) {
+              setPreviewContent(content);
+            }
+          })
+          .catch(() => {
+            if (previewRequestId.current === requestId) {
+              setPreviewContent(null);
+            }
+          });
       }
-      // Fetch full content (text or full-res image)
-      let cancelled = false;
-      invoke<string>("get_item_content", { id: item.id })
-        .then((content) => {
-          if (!cancelled) setPreviewContent(content);
-        })
-        .catch(() => {
-          if (!cancelled) setPreviewContent(null);
-        });
-      return () => { cancelled = true; };
     }
   }, [selectedIndex, showPreview, filteredItems]);
 
