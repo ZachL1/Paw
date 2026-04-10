@@ -30,11 +30,37 @@ export interface HistoryItem {
 
 type PreviewPlacement = "left" | "right";
 
-const PREVIEW_DELAY_MS = 500;
+const PREVIEW_DELAY_MS = 1500;
 const DEFAULT_PREVIEW_WIDTH = 400;
 const MIN_CONTENT_WIDTH = 340;
 const MIN_PREVIEW_WIDTH = 220;
 const WINDOW_ANIMATION_MS = 180;
+
+function buildDisplayTitle(item: HistoryItem, maxLength = 200): string {
+  if (item.title.trim().length > 0) {
+    return item.title;
+  }
+
+  if (item.content_type !== "text" || !item.content) {
+    return item.title;
+  }
+
+  const lines = item.content.replace(/\r\n/g, "\n").split("\n");
+  const firstNonEmptyLineIndex = lines.findIndex((line) => line.trim().length > 0);
+
+  if (firstNonEmptyLineIndex === -1) {
+    return "";
+  }
+
+  const prefix = firstNonEmptyLineIndex > 0 ? "⏎" : "";
+  const normalized = `${prefix}${lines[firstNonEmptyLineIndex].trim()}`;
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}…`;
+}
 
 function App() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -67,7 +93,12 @@ function App() {
   const loadHistory = useCallback(async () => {
     try {
       const history = await invoke<HistoryItem[]>("get_history");
-      setItems(history);
+      setItems(
+        history.map((item) => ({
+          ...item,
+          title: buildDisplayTitle(item),
+        }))
+      );
     } catch (e) {
       console.error("Failed to load history:", e);
     }

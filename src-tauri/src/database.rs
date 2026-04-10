@@ -232,12 +232,28 @@ impl Database {
 }
 
 fn truncate_title(s: &str, max_len: usize) -> String {
-    let single_line: String = s.lines().next().unwrap_or("").to_string();
-    if single_line.len() <= max_len {
-        single_line
+    let normalized = s.replace("\r\n", "\n");
+    let lines: Vec<&str> = normalized.split('\n').collect();
+    let first_non_empty = lines
+        .iter()
+        .enumerate()
+        .find(|(_, line)| !line.trim().is_empty());
+
+    let Some((index, line)) = first_non_empty else {
+        return String::new();
+    };
+
+    let mut title = if index > 0 {
+        format!("⏎{}", line.trim())
     } else {
-        format!("{}…", &single_line[..max_len])
+        line.trim().to_string()
+    };
+
+    if title.chars().count() > max_len {
+        title = format!("{}…", title.chars().take(max_len).collect::<String>());
     }
+
+    title
 }
 
 /// Generate a small thumbnail (max 48px height) as base64 PNG
