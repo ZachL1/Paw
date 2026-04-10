@@ -162,50 +162,71 @@ fn hide_window(app: AppHandle) {
 static PREVIEW_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
-fn show_preview(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
+fn show_preview(app: AppHandle, data: serde_json::Value, size_hint: Option<serde_json::Value>) -> Result<(), String> {
     let preview_window = app.get_window("preview").ok_or("Preview window not found")?;
+    let main_window = app.get_window("main").ok_or("Main window not found")?;
 
-    // Send data to preview window first (fast path)
+    // Send data to preview window
     let _ = preview_window.emit("preview-update", &data);
 
-    // Only reposition and show if not already visible
+    let scale_factor = main_window.scale_factor().unwrap_or(1.0);
+    let pos = main_window.outer_position().map_err(|e| e.to_string())?;
+    let size = main_window.outer_size().map_err(|e| e.to_string())?;
+    let main_x = pos.x as f64 / scale_factor;
+    let main_y = pos.y as f64 / scale_factor;
+    let main_w = size.width as f64 / scale_factor;
+    let main_h = size.height as f64 / scale_factor;
+
+    let (screen_x, screen_w, screen_y, screen_h) = if let Ok(Some(monitor)) = main_window.current_monitor() {
+        let mp = monitor.position();
+        let ms = monitor.size();
+        (
+            mp.x as f64 / scale_factor,
+            ms.width as f64 / scale_factor,
+            mp.y as f64 / scale_factor,
+            ms.height as f64 / scale_factor,
+        )
+    } else {
+        (0.0, 1920.0, 0.0, 1080.0)
+    };
+
+    // Parse size hint from frontend, with defaults
+    let (preview_w, preview_h) = if let Some(ref hint) = size_hint {
+        let w = hint.get("w").and_then(|v| v.as_f64()).unwrap_or(400.0);
+        let h = hint.get("h").and_then(|v| v.as_f64()).unwrap_or(main_h);
+        (w, h)
+    } else {
+        (400.0, main_h)
+    };
+
+    let gap: f64 = 8.0;
+
+    // Horizontal: prefer right side, fall back to left
+    let space_right = (screen_x + screen_w) - (main_x + main_w);
+    let preview_x = if space_right >= preview_w + gap {
+        main_x + main_w + gap
+    } else {
+        main_x - preview_w - gap
+    };
+
+    // Vertical: center preview relative to selected item area (approximate: center of main window)
+    // Clamp to screen bounds
+    let center_y = main_y + main_h / 2.0;
+    let mut preview_y = center_y - preview_h / 2.0;
+    // Clamp to screen
+    if preview_y < screen_y {
+        preview_y = screen_y;
+    }
+    if preview_y + preview_h > screen_y + screen_h {
+        preview_y = (screen_y + screen_h) - preview_h;
+    }
+
+    let _ = preview_window.set_size(LogicalSize::new(preview_w, preview_h));
+    let _ = preview_window.set_position(LogicalPosition::new(preview_x, preview_y));
+
     if !PREVIEW_VISIBLE.load(Ordering::SeqCst) {
-        let main_window = app.get_window("main").ok_or("Main window not found")?;
-
-        let pos = main_window.outer_position().map_err(|e| e.to_string())?;
-        let size = main_window.outer_size().map_err(|e| e.to_string())?;
-
-        let scale_factor = main_window.scale_factor().unwrap_or(1.0);
-        let main_x = pos.x as f64 / scale_factor;
-        let main_y = pos.y as f64 / scale_factor;
-        let main_w = size.width as f64 / scale_factor;
-        let main_h = size.height as f64 / scale_factor;
-
-        let (screen_x, screen_w) = if let Ok(Some(monitor)) = main_window.current_monitor() {
-            let mp = monitor.position();
-            let ms = monitor.size();
-            (mp.x as f64 / scale_factor, ms.width as f64 / scale_factor)
-        } else {
-            (0.0, 1920.0)
-        };
-
-        let preview_w: f64 = 480.0;
-        let gap: f64 = 8.0;
-
-        let space_right = (screen_x + screen_w) - (main_x + main_w);
-        let preview_x = if space_right >= preview_w + gap {
-            main_x + main_w + gap
-        } else {
-            main_x - preview_w - gap
-        };
-
-        let _ = preview_window.set_size(LogicalSize::new(preview_w, main_h));
-        let _ = preview_window.set_position(LogicalPosition::new(preview_x, main_y));
         let _ = preview_window.show();
-
         PREVIEW_VISIBLE.store(true, Ordering::SeqCst);
-
-        // Refocus main window
         let _ = main_window.set_focus();
     }
 

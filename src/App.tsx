@@ -22,6 +22,50 @@ export interface HistoryItem {
 }
 
 const PREVIEW_DELAY_MS = 500;
+const PREVIEW_MIN_W = 280;
+const PREVIEW_MAX_W = 560;
+const PREVIEW_MIN_H = 120;
+const PREVIEW_MAX_H = 600;
+const METADATA_BAR_H = 40;
+const PADDING = 32; // p-4 top + bottom
+
+function computeSizeHint(item: HistoryItem, content: string): { w: number; h: number } {
+  if (item.content_type === "image") {
+    // Parse dimensions from title like "1920 x 1080 image"
+    const match = item.title.match(/(\d+)\s*x\s*(\d+)/i);
+    if (match) {
+      const imgW = parseInt(match[1], 10);
+      const imgH = parseInt(match[2], 10);
+      const aspect = imgW / imgH;
+      // Fit image within max bounds, preserving aspect ratio
+      let w = Math.min(imgW, PREVIEW_MAX_W);
+      let h = w / aspect + METADATA_BAR_H + PADDING;
+      if (h > PREVIEW_MAX_H) {
+        h = PREVIEW_MAX_H;
+        w = (h - METADATA_BAR_H - PADDING) * aspect;
+      }
+      w = Math.max(w, PREVIEW_MIN_W);
+      h = Math.max(h, PREVIEW_MIN_H);
+      return { w: Math.round(w), h: Math.round(h) };
+    }
+    return { w: 400, h: 350 };
+  }
+
+  // Text content: size based on line count and max line length
+  const lines = content.split("\n");
+  const lineCount = lines.length;
+  const maxLineLen = Math.max(...lines.map(l => l.length));
+
+  // Width: based on longest line (13px font, ~7.8px per char mono)
+  const charW = 7.8;
+  const textW = Math.min(Math.max(maxLineLen * charW + PADDING, PREVIEW_MIN_W), PREVIEW_MAX_W);
+
+  // Height: ~20px per line + padding + metadata
+  const lineH = 20;
+  const textH = Math.min(Math.max(lineCount * lineH + PADDING + METADATA_BAR_H, PREVIEW_MIN_H), PREVIEW_MAX_H);
+
+  return { w: Math.round(textW), h: Math.round(textH) };
+}
 
 function App() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -67,12 +111,17 @@ function App() {
 
     try {
       const cached = contentCacheRef.current.get(item.id);
-      const quickData = {
-        content: cached
-          ? cached
-          : item.content_type === "image" && item.thumbnail
-            ? "data:image/png;base64," + item.thumbnail
-            : item.title,
+      const content = cached
+        ? cached
+        : item.content_type === "image" && item.thumbnail
+          ? "data:image/png;base64," + item.thumbnail
+          : item.title;
+
+      // Calculate size hint based on content
+      const sizeHint = computeSizeHint(item, content);
+
+      const previewData = {
+        content,
         content_type: item.content_type,
         title: item.title,
         is_pinned: item.is_pinned,
@@ -81,18 +130,18 @@ function App() {
         copy_count: item.copy_count,
       };
 
-      await invoke("show_preview", { data: quickData });
+      await invoke("show_preview", { data: previewData, sizeHint });
       previewVisibleRef.current = true;
 
-      // If we already have cached full content, no need for phase 2
       if (cached) return;
       if (previewRequestId.current !== requestId) return;
 
-      const content = await invoke<string>("get_item_content", { id: item.id });
+      const fullContent = await invoke<string>("get_item_content", { id: item.id });
       if (previewRequestId.current !== requestId) return;
 
-      contentCacheRef.current.set(item.id, content);
-      await invoke("show_preview", { data: { ...quickData, content } });
+      contentCacheRef.current.set(item.id, fullContent);
+      const fullSizeHint = computeSizeHint(item, fullContent);
+      await invoke("show_preview", { data: { ...previewData, content: fullContent }, sizeHint: fullSizeHint });
     } catch (e) {
       console.error("Failed to show preview:", e);
     }
