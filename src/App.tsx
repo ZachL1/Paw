@@ -301,19 +301,21 @@ function App() {
     const width = previewWidthRef.current;
 
     previewOpenRef.current = false;
-    setPreviewOpen(false);
-    setPreviewItem(null);
-    setPreviewContent(null);
 
     if (!wasOpen) {
       return;
     }
 
     try {
+      setPreviewWidth(0);
       await resizeWindowForPreview(false, placement, width);
     } catch (e) {
       console.error("Failed to close preview panel:", e);
     }
+
+    setPreviewOpen(false);
+    setPreviewItem(null);
+    setPreviewContent(null);
   }, [resizeWindowForPreview]);
 
   const showPreviewFor = useCallback(
