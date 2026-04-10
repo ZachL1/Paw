@@ -121,8 +121,8 @@ fn get_item_content(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<S
             .map_err(|e| e.to_string())?;
 
         let (w, h) = (img.width(), img.height());
-        let preview_img = if w > 512 || h > 512 {
-            img.thumbnail(512, 512)
+        let preview_img = if w > 1024 || h > 1024 {
+            img.thumbnail(1024, 1024)
         } else {
             img
         };
@@ -183,6 +183,10 @@ fn do_hide(app: &AppHandle) {
     WINDOW_VISIBLE.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_window("main") {
         let _ = window.hide();
+    }
+    // Also hide preview window
+    if let Some(preview) = app.get_window("preview") {
+        let _ = preview.hide();
     }
 }
 

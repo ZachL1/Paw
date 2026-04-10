@@ -8,6 +8,7 @@ interface HistoryListProps {
   onSelect: (item: HistoryItem) => void;
   onDelete: (id: number) => void;
   onTogglePin: (id: number) => void;
+  onHover?: (index: number) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -21,7 +22,7 @@ function timeAgo(dateStr: string): string {
 }
 
 const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
-  ({ items, selectedIndex, onSelect, onDelete, onTogglePin }, ref) => {
+  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover }, ref) => {
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
@@ -82,6 +83,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                   ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
                 `}
                 onClick={() => onSelect(item)}
+                onMouseEnter={() => onHover?.(index)}
                 onDoubleClick={(e) => {
                   e.preventDefault();
                   onTogglePin(item.id);

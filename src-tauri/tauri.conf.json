@@ -21,15 +21,7 @@
         "all": true
       },
       "window": {
-        "all": false,
-        "close": true,
-        "hide": true,
-        "show": true,
-        "minimize": true,
-        "setFocus": true,
-        "setAlwaysOnTop": true,
-        "setSkipTaskbar": true,
-        "startDragging": true
+        "all": true
       }
     },
     "bundle": {

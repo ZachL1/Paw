@@ -3,10 +3,9 @@ import { isMac } from "../utils/platform";
 interface FooterProps {
   itemCount: number;
   onClearAll: () => void;
-  showPreview: boolean;
 }
 
-function Footer({ itemCount, onClearAll, showPreview }: FooterProps) {
+function Footer({ itemCount, onClearAll }: FooterProps) {
   const mod = isMac ? "⌥" : "Alt+";
 
   return (
@@ -14,7 +13,7 @@ function Footer({ itemCount, onClearAll, showPreview }: FooterProps) {
       <span>{itemCount} items</span>
       <div className="flex items-center gap-1">
         <span>
-          ↑↓ nav · ↵ paste · {showPreview ? "←" : "→"} preview · {mod}P pin
+          ↑↓ nav · ↵ paste · {mod}P pin
         </span>
         {itemCount > 0 && (
           <button
