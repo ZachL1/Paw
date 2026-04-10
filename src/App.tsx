@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
-import { listen, emit } from "@tauri-apps/api/event";
-import { WebviewWindow, appWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import Fuse from "fuse.js";
 import { isMac } from "./utils/platform";
 import SearchBar from "./components/SearchBar";
@@ -23,8 +22,6 @@ export interface HistoryItem {
 }
 
 const PREVIEW_DELAY_MS = 500;
-const PREVIEW_WIDTH = 480;
-const PREVIEW_GAP = 8;
 
 function App() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -34,9 +31,11 @@ function App() {
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewWindowRef = useRef<WebviewWindow | null>(null);
   const previewVisibleRef = useRef(false);
   const previewRequestId = useRef(0);
+  const previewItemIdRef = useRef<number | null>(null);
+  // Keep a ref to filteredItems so callbacks can access latest without re-creating
+  const filteredItemsRef = useRef<HistoryItem[]>([]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -47,74 +46,30 @@ function App() {
     }
   }, []);
 
-  // Hide preview window
-  const hidePreview = useCallback(async () => {
+  const hidePreview = useCallback(() => {
     previewVisibleRef.current = false;
+    previewItemIdRef.current = null;
     if (previewTimerRef.current) {
       clearTimeout(previewTimerRef.current);
       previewTimerRef.current = null;
     }
-    const pw = previewWindowRef.current;
-    if (pw) {
-      try {
-        await pw.hide();
-      } catch {
-        // window may already be closed
-      }
-    }
+    invoke("hide_preview").catch(() => {});
   }, []);
 
-  // Create or get the preview window
-  const getOrCreatePreviewWindow = useCallback(async (): Promise<WebviewWindow> => {
-    const existing = WebviewWindow.getByLabel("preview");
-    if (existing) {
-      previewWindowRef.current = existing;
-      return existing;
+  const showPreviewFor = useCallback(async (item: HistoryItem) => {
+    // Skip if already showing this exact item
+    if (previewItemIdRef.current === item.id && previewVisibleRef.current) {
+      return;
     }
-
-    const pw = new WebviewWindow("preview", {
-      url: "index.html?preview=1",
-      decorations: false,
-      transparent: true,
-      width: PREVIEW_WIDTH,
-      height: 400,
-      visible: false,
-      alwaysOnTop: true,
-      skipTaskbar: true,
-      focus: false,
-      resizable: false,
-    });
-
-    previewWindowRef.current = pw;
-
-    // Redirect focus back to main window if preview gets focused
-    pw.onFocusChanged(({ payload: focused }) => {
-      if (focused) {
-        appWindow.setFocus();
-      }
-    });
-
-    // Wait for the window to be created
-    await new Promise<void>((resolve) => {
-      pw.once("tauri://created", () => resolve());
-      pw.once("tauri://error", () => resolve());
-    });
-
-    return pw;
-  }, []);
-
-  // Position and show preview window next to main window
-  const showPreviewAt = useCallback(async (item: HistoryItem) => {
+    previewItemIdRef.current = item.id;
     const requestId = ++previewRequestId.current;
 
     try {
-      // Load full content
-      const content = await invoke<string>("get_item_content", { id: item.id });
-      if (previewRequestId.current !== requestId) return;
-
-      // Send preview data
-      const previewData = {
-        content,
+      // Send quick preview immediately with thumbnail/title
+      const quickData = {
+        content: item.content_type === "image" && item.thumbnail
+          ? "data:image/png;base64," + item.thumbnail
+          : item.title,
         content_type: item.content_type,
         title: item.title,
         is_pinned: item.is_pinned,
@@ -123,84 +78,38 @@ function App() {
         copy_count: item.copy_count,
       };
 
-      const pw = await getOrCreatePreviewWindow();
+      await invoke("show_preview", { data: quickData });
+      previewVisibleRef.current = true;
       if (previewRequestId.current !== requestId) return;
 
-      // Get main window position and size
-      const pos = await appWindow.outerPosition();
-      const size = await appWindow.outerSize();
-      const monitor = await appWindow.currentMonitor();
+      // Then load full content asynchronously
+      const content = await invoke<string>("get_item_content", { id: item.id });
+      if (previewRequestId.current !== requestId) return;
 
-      if (!monitor) return;
-
-      const scaleFactor = monitor.scaleFactor || 1;
-      const screenWidth = monitor.size.width / scaleFactor;
-      const screenLeft = monitor.position.x / scaleFactor;
-
-      const mainX = pos.x / scaleFactor;
-      const mainY = pos.y / scaleFactor;
-      const mainW = size.width / scaleFactor;
-      const mainH = size.height / scaleFactor;
-
-      // Decide: show to left or right of main window
-      const spaceRight = (screenLeft + screenWidth) - (mainX + mainW);
-      const spaceLeft = mainX - screenLeft;
-      const previewW = PREVIEW_WIDTH;
-
-      let previewX: number;
-      if (spaceRight >= previewW + PREVIEW_GAP) {
-        // Show to the right
-        previewX = mainX + mainW + PREVIEW_GAP;
-      } else if (spaceLeft >= previewW + PREVIEW_GAP) {
-        // Show to the left
-        previewX = mainX - previewW - PREVIEW_GAP;
-      } else {
-        // Default: right, even if it goes off screen slightly
-        previewX = mainX + mainW + PREVIEW_GAP;
-      }
-
-      // Calculate preview height - match main window height
-      const previewH = Math.min(mainH, monitor.size.height / scaleFactor - 40);
-
-      await pw.setSize(new LogicalSize(previewW, previewH));
-      await pw.setPosition(new LogicalPosition(previewX, mainY));
-
-      // Emit preview data to the preview window
-      await emit("preview-update", previewData);
-
-      if (!previewVisibleRef.current) {
-        await pw.show();
-        previewVisibleRef.current = true;
-        // Immediately refocus main window
-        await appWindow.setFocus();
-      }
+      await invoke("show_preview", { data: { ...quickData, content } });
     } catch (e) {
       console.error("Failed to show preview:", e);
     }
-  }, [getOrCreatePreviewWindow]);
+  }, []);
 
-  // Schedule preview after delay
-  const schedulePreview = useCallback((item: HistoryItem | undefined) => {
+  // Trigger preview for a given item — called explicitly from keyboard/hover
+  const triggerPreview = useCallback((item: HistoryItem | undefined) => {
     if (previewTimerRef.current) {
       clearTimeout(previewTimerRef.current);
       previewTimerRef.current = null;
     }
-
     if (!item) {
       hidePreview();
       return;
     }
-
-    // If preview is already visible, update immediately (no delay for navigation)
     if (previewVisibleRef.current) {
-      showPreviewAt(item);
-      return;
+      showPreviewFor(item);
+    } else {
+      previewTimerRef.current = setTimeout(() => {
+        showPreviewFor(item);
+      }, PREVIEW_DELAY_MS);
     }
-
-    previewTimerRef.current = setTimeout(() => {
-      showPreviewAt(item);
-    }, PREVIEW_DELAY_MS);
-  }, [showPreviewAt, hidePreview]);
+  }, [showPreviewFor, hidePreview]);
 
   useEffect(() => {
     loadHistory();
@@ -227,7 +136,7 @@ function App() {
     };
   }, [loadHistory, hidePreview]);
 
-  // Fuzzy search with Fuse.js
+  // Fuzzy search
   const fuse = useRef(
     new Fuse<HistoryItem>([], {
       keys: ["title"],
@@ -244,10 +153,8 @@ function App() {
     ? fuse.current.search(query).map((r) => r.item)
     : items;
 
-  // Trigger preview when selection changes
-  useEffect(() => {
-    schedulePreview(filteredItems[selectedIndex]);
-  }, [selectedIndex, filteredItems, schedulePreview]);
+  // Keep ref in sync
+  filteredItemsRef.current = filteredItems;
 
   const handleSelect = useCallback(async (item: HistoryItem) => {
     try {
@@ -291,23 +198,36 @@ function App() {
     }
   }, [loadHistory]);
 
+  // Hover triggers selection change + preview
+  const handleHover = useCallback((index: number) => {
+    setSelectedIndex(index);
+    triggerPreview(filteredItemsRef.current[index]);
+  }, [triggerPreview]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const maxIndex = filteredItems.length - 1;
+      const curItems = filteredItemsRef.current;
+      const maxIndex = curItems.length - 1;
 
       switch (true) {
-        case e.key === "ArrowDown" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "n"):
+        case e.key === "ArrowDown" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "n"): {
           e.preventDefault();
-          setSelectedIndex((i) => Math.min(i + 1, maxIndex));
+          const newIdx = Math.min(selectedIndex + 1, maxIndex);
+          setSelectedIndex(newIdx);
+          triggerPreview(curItems[newIdx]);
           break;
-        case e.key === "ArrowUp" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "p"):
+        }
+        case e.key === "ArrowUp" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "p"): {
           e.preventDefault();
-          setSelectedIndex((i) => Math.max(i - 1, 0));
+          const newIdx = Math.max(selectedIndex - 1, 0);
+          setSelectedIndex(newIdx);
+          triggerPreview(curItems[newIdx]);
           break;
+        }
         case e.key === "Enter":
           e.preventDefault();
-          if (filteredItems[selectedIndex]) {
-            handleSelect(filteredItems[selectedIndex]);
+          if (curItems[selectedIndex]) {
+            handleSelect(curItems[selectedIndex]);
           }
           break;
         case e.key === "Escape":
@@ -325,14 +245,14 @@ function App() {
           break;
         case e.altKey && (e.key === "p" || e.code === "KeyP"):
           e.preventDefault();
-          if (filteredItems[selectedIndex]) {
-            handleTogglePin(filteredItems[selectedIndex].id);
+          if (curItems[selectedIndex]) {
+            handleTogglePin(curItems[selectedIndex].id);
           }
           break;
         case (e.key === "Delete" || (isMac && e.key === "Backspace")) && e.altKey:
           e.preventDefault();
-          if (filteredItems[selectedIndex]) {
-            handleDelete(filteredItems[selectedIndex].id);
+          if (curItems[selectedIndex]) {
+            handleDelete(curItems[selectedIndex].id);
           }
           break;
         case e.key === "," && (e.ctrlKey || (isMac && e.metaKey)):
@@ -342,24 +262,25 @@ function App() {
         case e.key >= "1" && e.key <= "9" && (isMac ? e.metaKey : e.ctrlKey): {
           e.preventDefault();
           const n = parseInt(e.key, 10);
-          const unpinnedStart = filteredItems.findIndex((item) => !item.is_pinned);
+          const unpinnedStart = curItems.findIndex((item) => !item.is_pinned);
           if (unpinnedStart !== -1) {
             const targetIndex = unpinnedStart + (n - 1);
-            if (targetIndex < filteredItems.length && !filteredItems[targetIndex].is_pinned) {
+            if (targetIndex < curItems.length && !curItems[targetIndex].is_pinned) {
               setSelectedIndex(targetIndex);
-              handleSelect(filteredItems[targetIndex]);
+              handleSelect(curItems[targetIndex]);
             }
           }
           break;
         }
       }
     },
-    [filteredItems, selectedIndex, handleSelect, handleDelete, handleTogglePin, hidePreview]
+    [selectedIndex, handleSelect, handleDelete, handleTogglePin, hidePreview, triggerPreview]
   );
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query]);
+    hidePreview();
+  }, [query, hidePreview]);
 
   return (
     <div
@@ -391,7 +312,7 @@ function App() {
             onSelect={handleSelect}
             onDelete={handleDelete}
             onTogglePin={handleTogglePin}
-            onHover={setSelectedIndex}
+            onHover={handleHover}
           />
           <Footer
             itemCount={filteredItems.length}

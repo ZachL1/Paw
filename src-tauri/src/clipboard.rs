@@ -1,7 +1,7 @@
 use arboard::Clipboard as ArboardClipboard;
 use sha2::{Sha256, Digest};
 use std::io::Cursor;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -19,6 +19,8 @@ pub struct ClipboardMonitor {
     last_content: Arc<Mutex<LastClipboard>>,
     running: Arc<Mutex<bool>>,
     suppress: Arc<AtomicBool>,
+    /// Tracks the macOS pasteboard changeCount for fast change detection
+    last_change_count: Arc<AtomicI64>,
 }
 
 impl ClipboardMonitor {
@@ -27,6 +29,7 @@ impl ClipboardMonitor {
             last_content: Arc::new(Mutex::new(LastClipboard::Empty)),
             running: Arc::new(Mutex::new(false)),
             suppress: Arc::new(AtomicBool::new(false)),
+            last_change_count: Arc::new(AtomicI64::new(-1)),
         }
     }
 
@@ -42,6 +45,7 @@ impl ClipboardMonitor {
         let last_content = self.last_content.clone();
         let running = self.running.clone();
         let suppress = self.suppress.clone();
+        let last_change_count = self.last_change_count.clone();
 
         // Initialize with current clipboard content
         if let Ok(mut clipboard) = ArboardClipboard::new() {
@@ -50,6 +54,13 @@ impl ClipboardMonitor {
                     *last_content.lock().unwrap() = LastClipboard::Text(text);
                 }
             }
+        }
+
+        // Initialize macOS change count
+        #[cfg(target_os = "macos")]
+        {
+            let count = macos_change_count();
+            last_change_count.store(count, Ordering::SeqCst);
         }
 
         *running.lock().unwrap() = true;
@@ -63,6 +74,18 @@ impl ClipboardMonitor {
                 }
 
                 thread::sleep(poll_interval);
+
+                // On macOS, use changeCount for fast "nothing changed" detection
+                #[cfg(target_os = "macos")]
+                {
+                    let current_count = macos_change_count();
+                    let prev_count = last_change_count.load(Ordering::SeqCst);
+                    if current_count == prev_count && current_count >= 0 {
+                        // Clipboard hasn't changed — skip expensive content checks
+                        continue;
+                    }
+                    last_change_count.store(current_count, Ordering::SeqCst);
+                }
 
                 let mut clipboard = match ArboardClipboard::new() {
                     Ok(c) => c,
@@ -148,6 +171,22 @@ impl ClipboardMonitor {
 
     pub fn stop(&self) {
         *self.running.lock().unwrap() = false;
+    }
+}
+
+/// Read macOS NSPasteboard.general.changeCount via objc FFI (no subprocess overhead)
+#[cfg(target_os = "macos")]
+fn macos_change_count() -> i64 {
+    use objc::{msg_send, sel, sel_impl, class};
+    use objc::runtime::Object;
+    unsafe {
+        let cls = class!(NSPasteboard);
+        let pb: *mut Object = msg_send![cls, generalPasteboard];
+        if pb.is_null() {
+            return -1;
+        }
+        let count: i64 = msg_send![pb, changeCount];
+        count
     }
 }
 

@@ -2285,6 +2285,7 @@ dependencies = [
  "env_logger",
  "image 0.25.10",
  "log",
+ "objc",
  "rusqlite",
  "serde",
  "serde_json",

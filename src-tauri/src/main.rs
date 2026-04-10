@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
-    SystemTray, SystemTrayEvent, SystemTrayMenu,
+    SystemTray, SystemTrayEvent, SystemTrayMenu, LogicalPosition, LogicalSize,
 };
 
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
@@ -179,12 +179,73 @@ fn hide_window(app: AppHandle) {
     do_hide(&app);
 }
 
+static PREVIEW_VISIBLE: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
+fn show_preview(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
+    let preview_window = app.get_window("preview").ok_or("Preview window not found")?;
+
+    // Send data to preview window first (fast path)
+    let _ = preview_window.emit("preview-update", &data);
+
+    // Only reposition and show if not already visible
+    if !PREVIEW_VISIBLE.load(Ordering::SeqCst) {
+        let main_window = app.get_window("main").ok_or("Main window not found")?;
+
+        let pos = main_window.outer_position().map_err(|e| e.to_string())?;
+        let size = main_window.outer_size().map_err(|e| e.to_string())?;
+
+        let scale_factor = main_window.scale_factor().unwrap_or(1.0);
+        let main_x = pos.x as f64 / scale_factor;
+        let main_y = pos.y as f64 / scale_factor;
+        let main_w = size.width as f64 / scale_factor;
+        let main_h = size.height as f64 / scale_factor;
+
+        let (screen_x, screen_w) = if let Ok(Some(monitor)) = main_window.current_monitor() {
+            let mp = monitor.position();
+            let ms = monitor.size();
+            (mp.x as f64 / scale_factor, ms.width as f64 / scale_factor)
+        } else {
+            (0.0, 1920.0)
+        };
+
+        let preview_w: f64 = 480.0;
+        let gap: f64 = 8.0;
+
+        let space_right = (screen_x + screen_w) - (main_x + main_w);
+        let preview_x = if space_right >= preview_w + gap {
+            main_x + main_w + gap
+        } else {
+            main_x - preview_w - gap
+        };
+
+        let _ = preview_window.set_size(LogicalSize::new(preview_w, main_h));
+        let _ = preview_window.set_position(LogicalPosition::new(preview_x, main_y));
+        let _ = preview_window.show();
+
+        PREVIEW_VISIBLE.store(true, Ordering::SeqCst);
+
+        // Refocus main window
+        let _ = main_window.set_focus();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_preview(app: AppHandle) {
+    PREVIEW_VISIBLE.store(false, Ordering::SeqCst);
+    if let Some(preview) = app.get_window("preview") {
+        let _ = preview.hide();
+    }
+}
+
 fn do_hide(app: &AppHandle) {
     WINDOW_VISIBLE.store(false, Ordering::SeqCst);
+    PREVIEW_VISIBLE.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_window("main") {
         let _ = window.hide();
     }
-    // Also hide preview window
     if let Some(preview) = app.get_window("preview") {
         let _ = preview.hide();
     }
@@ -304,6 +365,8 @@ fn main() {
             get_config,
             save_config,
             hide_window,
+            show_preview,
+            hide_preview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Paw");

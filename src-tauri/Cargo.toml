@@ -20,6 +20,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
 sha2 = "0.10"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
