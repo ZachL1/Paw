@@ -85,6 +85,7 @@ function App() {
   const contentWidthRef = useRef(400);
   const windowAnimationTokenRef = useRef(0);
   const windowAnimatingRef = useRef(false);
+  const dismissingWindowRef = useRef(false);
   const previewRequestIdRef = useRef(0);
   const previewItemIdRef = useRef<number | null>(null);
   const filteredItemsRef = useRef<HistoryItem[]>([]);
@@ -318,6 +319,42 @@ function App() {
     setPreviewContent(null);
   }, [resizeWindowForPreview]);
 
+  const hideWindow = useCallback(async () => {
+    if (dismissingWindowRef.current) {
+      return;
+    }
+
+    dismissingWindowRef.current = true;
+    previewRequestIdRef.current += 1;
+    previewItemIdRef.current = null;
+    setPreviewLoading(false);
+
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+
+    const wasOpen = previewOpenRef.current;
+    const placement = previewPlacementRef.current;
+    const width = previewWidthRef.current;
+
+    previewOpenRef.current = false;
+    setPreviewOpen(false);
+    setPreviewItem(null);
+    setPreviewContent(null);
+
+    try {
+      await invoke("hide_window");
+      if (wasOpen) {
+        await resizeWindowForPreview(false, placement, width);
+      }
+    } catch (e) {
+      console.error("Failed to hide window:", e);
+    } finally {
+      dismissingWindowRef.current = false;
+    }
+  }, [resizeWindowForPreview]);
+
   const showPreviewFor = useCallback(
     async (item: HistoryItem) => {
       const requestId = ++previewRequestIdRef.current;
@@ -437,13 +474,25 @@ function App() {
       unlistenResize = fn;
     });
 
+    let unlistenFocus: (() => void) | null = null;
+    void appWindow
+      .onFocusChanged(({ payload: focused }) => {
+        if (!focused) {
+          void hideWindow();
+        }
+      })
+      .then((fn) => {
+        unlistenFocus = fn;
+      });
+
     return () => {
       unlistenClipboard?.();
       unlistenShown?.();
       unlistenSettings?.();
       unlistenResize?.();
+      unlistenFocus?.();
     };
-  }, [closePreview, loadHistory, syncContentWidthFromWindow]);
+  }, [closePreview, hideWindow, loadHistory, syncContentWidthFromWindow]);
 
   const fuse = useRef(
     new Fuse<HistoryItem>([], {
@@ -616,11 +665,7 @@ function App() {
           break;
         case e.key === "Escape":
           e.preventDefault();
-          if (previewOpenRef.current) {
-            void closePreview();
-          } else {
-            void invoke("hide_window");
-          }
+          void hideWindow();
           break;
         case (e.ctrlKey || (isMac && e.metaKey)) && e.key === "u":
           e.preventDefault();
@@ -667,6 +712,7 @@ function App() {
       handleDelete,
       handleSelect,
       handleTogglePin,
+      hideWindow,
       selectedIndex,
       showPreviewFor,
       triggerPreview,
