@@ -22,49 +22,31 @@ export interface HistoryItem {
 }
 
 const PREVIEW_DELAY_MS = 500;
-const PREVIEW_MIN_W = 280;
-const PREVIEW_MAX_W = 560;
-const PREVIEW_MIN_H = 120;
-const PREVIEW_MAX_H = 600;
 const METADATA_BAR_H = 40;
-const PADDING = 32; // p-4 top + bottom
+const PADDING = 32;
 
-function computeSizeHint(item: HistoryItem, content: string): { w: number; h: number } {
+// Size hints are just content-ideal sizes; Rust will clamp to available screen space
+function computeSizeHint(item: HistoryItem, _content: string): { w: number; h: number } {
   if (item.content_type === "image") {
-    // Parse dimensions from title like "1920 x 1080 image"
     const match = item.title.match(/(\d+)\s*x\s*(\d+)/i);
     if (match) {
       const imgW = parseInt(match[1], 10);
       const imgH = parseInt(match[2], 10);
       const aspect = imgW / imgH;
-      // Fit image within max bounds, preserving aspect ratio
-      let w = Math.min(imgW, PREVIEW_MAX_W);
+      // Request generous size — Rust will clamp to screen
+      let w = Math.min(imgW, 800);
       let h = w / aspect + METADATA_BAR_H + PADDING;
-      if (h > PREVIEW_MAX_H) {
-        h = PREVIEW_MAX_H;
+      if (h > 900) {
+        h = 900;
         w = (h - METADATA_BAR_H - PADDING) * aspect;
       }
-      w = Math.max(w, PREVIEW_MIN_W);
-      h = Math.max(h, PREVIEW_MIN_H);
-      return { w: Math.round(w), h: Math.round(h) };
+      return { w: Math.round(Math.max(w, 300)), h: Math.round(Math.max(h, 200)) };
     }
-    return { w: 400, h: 350 };
+    return { w: 500, h: 450 };
   }
 
-  // Text content: size based on line count and max line length
-  const lines = content.split("\n");
-  const lineCount = lines.length;
-  const maxLineLen = Math.max(...lines.map(l => l.length));
-
-  // Width: based on longest line (13px font, ~7.8px per char mono)
-  const charW = 7.8;
-  const textW = Math.min(Math.max(maxLineLen * charW + PADDING, PREVIEW_MIN_W), PREVIEW_MAX_W);
-
-  // Height: ~20px per line + padding + metadata
-  const lineH = 20;
-  const textH = Math.min(Math.max(lineCount * lineH + PADDING + METADATA_BAR_H, PREVIEW_MIN_H), PREVIEW_MAX_H);
-
-  return { w: Math.round(textW), h: Math.round(textH) };
+  // Text: request a comfortable reading width, let Rust clamp
+  return { w: 480, h: 400 };
 }
 
 function App() {
