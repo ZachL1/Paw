@@ -69,7 +69,7 @@
         "height": 500,
         "resizable": false,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "visible": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
