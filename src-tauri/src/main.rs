@@ -106,33 +106,13 @@ fn toggle_pin(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<bool, S
 fn get_item_content(id: i64, state: tauri::State<'_, Arc<Database>>) -> Result<String, String> {
     let content_type = state.get_content_type(id).map_err(|e| e.to_string())?;
     if content_type == "image" {
+        // Image is already stored as PNG — just base64-encode the raw blob
         let blob = state
             .get_image_blob(id)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "Image data not found".to_string())?;
 
-        // Downscale for preview if image is large (max 512px on longest side)
-        use image::ImageReader;
-        use std::io::Cursor;
-        let img = ImageReader::new(Cursor::new(&blob))
-            .with_guessed_format()
-            .map_err(|e| e.to_string())?
-            .decode()
-            .map_err(|e| e.to_string())?;
-
-        let (w, h) = (img.width(), img.height());
-        let preview_img = if w > 1024 || h > 1024 {
-            img.thumbnail(1024, 1024)
-        } else {
-            img
-        };
-
-        let mut buf = Vec::new();
-        preview_img
-            .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
-            .map_err(|e| e.to_string())?;
-
-        Ok(format!("data:image/png;base64,{}", BASE64.encode(&buf)))
+        Ok(format!("data:image/png;base64,{}", BASE64.encode(&blob)))
     } else {
         state
             .get_content_by_id(id)
