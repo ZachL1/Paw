@@ -192,6 +192,7 @@ fn do_show(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
 
+        #[cfg(target_os = "linux")]
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(150));
             let output = std::process::Command::new("xdotool")
@@ -211,6 +212,14 @@ fn do_show(app: &AppHandle) {
                     }
                 }
             }
+        });
+
+        #[cfg(target_os = "macos")]
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let _ = std::process::Command::new("osascript")
+                .args(["-e", "tell application \"Paw\" to activate"])
+                .output();
         });
 
         let _ = window.emit("window-shown", ());

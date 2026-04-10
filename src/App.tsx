@@ -195,13 +195,13 @@ function App() {
           e.preventDefault();
           setShowPreview(false);
           break;
-        case e.altKey && e.key === "p":
+        case e.altKey && (e.key === "p" || e.code === "KeyP"):
           e.preventDefault();
           if (filteredItems[selectedIndex]) {
             handleTogglePin(filteredItems[selectedIndex].id);
           }
           break;
-        case e.key === "Delete" && e.altKey:
+        case (e.key === "Delete" || (isMac && e.key === "Backspace")) && e.altKey:
           e.preventDefault();
           if (filteredItems[selectedIndex]) {
             handleDelete(filteredItems[selectedIndex].id);
