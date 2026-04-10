@@ -29,12 +29,14 @@ function PreviewPanel({ item, content }: PreviewPanelProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        {item.content_type === "image" && content?.startsWith("data:image/") ? (
+        {content?.startsWith("data:image/") ? (
           <img
             src={content}
             alt="clipboard image"
             className="max-w-full rounded"
           />
+        ) : item.content_type === "image" ? (
+          <div className="text-white/30 text-xs text-center py-4">🖼 Image</div>
         ) : (
           <pre className="text-white/80 text-xs whitespace-pre-wrap break-all font-mono leading-relaxed">
             {content || item.title}
