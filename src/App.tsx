@@ -525,14 +525,34 @@ function App() {
 
   const handleSelect = useCallback(
     async (item: HistoryItem) => {
+      const wasOpen = previewOpenRef.current;
+      const placement = previewPlacementRef.current;
+      const width = previewWidthRef.current;
+
+      previewRequestIdRef.current += 1;
+      previewItemIdRef.current = null;
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+        previewTimerRef.current = null;
+      }
+
       try {
-        await closePreview();
         await invoke("paste_item", { id: item.id });
+        if (wasOpen) {
+          previewOpenRef.current = false;
+          await resizeWindowForPreview(false, placement, width);
+        }
       } catch (e) {
         console.error("Failed to paste:", e);
+      } finally {
+        previewOpenRef.current = false;
+        setPreviewOpen(false);
+        setPreviewItem(null);
+        setPreviewContent(null);
+        setPreviewLoading(false);
       }
     },
-    [closePreview]
+    [resizeWindowForPreview]
   );
 
   const handleDelete = useCallback(
