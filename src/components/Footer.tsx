@@ -1,3 +1,5 @@
+import { isMac } from "../utils/platform";
+
 interface FooterProps {
   itemCount: number;
   onClearAll: () => void;
@@ -20,7 +22,7 @@ function Footer({ itemCount, onClearAll, showPreview }: FooterProps) {
           preview
         </span>
         <span>
-          <kbd className="px-1 py-0.5 bg-white/10 rounded">Alt+P</kbd> pin
+          <kbd className="px-1 py-0.5 bg-white/10 rounded">{isMac ? "⌥P" : "Alt+P"}</kbd> pin
         </span>
         {itemCount > 0 && (
           <button

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
+import { isMac } from "../utils/platform";
 
 interface Config {
   hotkey: string;
@@ -89,7 +90,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
               className="rounded accent-blue-500"
             />
             <span className="text-white/70 text-xs">
-              Paste on select (simulate Ctrl+V)
+              Paste on select (simulate {isMac ? "⌘V" : "Ctrl+V"})
             </span>
           </label>
         </section>

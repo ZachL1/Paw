@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import Fuse from "fuse.js";
+import { isMac } from "./utils/platform";
 import SearchBar from "./components/SearchBar";
 import HistoryList from "./components/HistoryList";
 import PreviewPanel from "./components/PreviewPanel";
@@ -159,11 +160,11 @@ function App() {
       const maxIndex = filteredItems.length - 1;
 
       switch (true) {
-        case e.key === "ArrowDown" || (e.ctrlKey && e.key === "n"):
+        case e.key === "ArrowDown" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "n"):
           e.preventDefault();
           setSelectedIndex((i) => Math.min(i + 1, maxIndex));
           break;
-        case e.key === "ArrowUp" || (e.ctrlKey && e.key === "p"):
+        case e.key === "ArrowUp" || ((e.ctrlKey || (isMac && e.metaKey)) && e.key === "p"):
           e.preventDefault();
           setSelectedIndex((i) => Math.max(i - 1, 0));
           break;
@@ -181,7 +182,7 @@ function App() {
             invoke("hide_window");
           }
           break;
-        case e.ctrlKey && e.key === "u":
+        case (e.ctrlKey || (isMac && e.metaKey)) && e.key === "u":
           e.preventDefault();
           setQuery("");
           setSelectedIndex(0);
@@ -206,7 +207,7 @@ function App() {
             handleDelete(filteredItems[selectedIndex].id);
           }
           break;
-        case e.key === "," && e.ctrlKey:
+        case e.key === "," && (e.ctrlKey || (isMac && e.metaKey)):
           e.preventDefault();
           setShowSettings((s) => !s);
           break;
