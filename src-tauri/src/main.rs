@@ -162,7 +162,7 @@ fn hide_window(app: AppHandle) {
 static PREVIEW_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
-fn show_preview(app: AppHandle, data: serde_json::Value, size_hint: Option<serde_json::Value>) -> Result<(), String> {
+fn show_preview(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
     let preview_window = app.get_window("preview").ok_or("Preview window not found")?;
     let main_window = app.get_window("main").ok_or("Main window not found")?;
 
@@ -176,74 +176,27 @@ fn show_preview(app: AppHandle, data: serde_json::Value, size_hint: Option<serde
     let main_w = size.width as f64 / scale_factor;
     let main_h = size.height as f64 / scale_factor;
 
-    let (screen_x, screen_w, screen_y, screen_h) = if let Ok(Some(monitor)) = main_window.current_monitor() {
+    let screen_max_x = if let Ok(Some(monitor)) = main_window.current_monitor() {
         let mp = monitor.position();
         let ms = monitor.size();
-        (
-            mp.x as f64 / scale_factor,
-            ms.width as f64 / scale_factor,
-            mp.y as f64 / scale_factor,
-            ms.height as f64 / scale_factor,
-        )
+        (mp.x as f64 + ms.width as f64) / scale_factor
     } else {
-        (0.0, 1920.0, 0.0, 1080.0)
+        1920.0
     };
 
-    // Requested size from frontend
-    let (req_w, req_h) = if let Some(ref hint) = size_hint {
-        let w = hint.get("w").and_then(|v| v.as_f64()).unwrap_or(480.0);
-        let h = hint.get("h").and_then(|v| v.as_f64()).unwrap_or(400.0);
-        (w, h)
+    // Fixed preview width (like Maccy's default 400px), height matches main window
+    let preview_w: f64 = 400.0;
+    let preview_h: f64 = main_h;
+
+    // Place flush against main window: prefer right, fall back to left
+    let preview_x = if main_x + main_w + preview_w <= screen_max_x {
+        main_x + main_w  // Flush right
     } else {
-        (480.0, 400.0)
-    };
-
-    let gap: f64 = 8.0;
-    let min_side_w: f64 = 250.0; // minimum useful preview width for side placement
-
-    let space_right = (screen_x + screen_w) - (main_x + main_w) - gap;
-    let space_left = (main_x - screen_x) - gap;
-
-    // Decide placement: right, left, or overlay
-    enum Placement { Right(f64), Left(f64), Overlay }
-
-    let placement = if space_right >= min_side_w {
-        Placement::Right(space_right)
-    } else if space_left >= min_side_w {
-        Placement::Left(space_left)
-    } else {
-        Placement::Overlay
-    };
-
-    let (preview_w, preview_h, preview_x, preview_y) = match placement {
-        Placement::Right(avail_w) => {
-            let w = req_w.min(avail_w).max(min_side_w);
-            let h = req_h.min(screen_h - 40.0).max(120.0);
-            let x = main_x + main_w + gap;
-            let mut y = main_y + main_h / 2.0 - h / 2.0;
-            y = y.max(screen_y).min(screen_y + screen_h - h);
-            (w, h, x, y)
-        }
-        Placement::Left(avail_w) => {
-            let w = req_w.min(avail_w).max(min_side_w);
-            let h = req_h.min(screen_h - 40.0).max(120.0);
-            let x = main_x - gap - w;
-            let mut y = main_y + main_h / 2.0 - h / 2.0;
-            y = y.max(screen_y).min(screen_y + screen_h - h);
-            (w, h, x, y)
-        }
-        Placement::Overlay => {
-            // Center over main window, use most of main window area
-            let w = req_w.min(main_w - 20.0).max(min_side_w);
-            let h = req_h.min(main_h - 20.0).max(120.0);
-            let x = main_x + (main_w - w) / 2.0;
-            let y = main_y + (main_h - h) / 2.0;
-            (w, h, x, y)
-        }
+        main_x - preview_w  // Flush left
     };
 
     let _ = preview_window.set_size(LogicalSize::new(preview_w, preview_h));
-    let _ = preview_window.set_position(LogicalPosition::new(preview_x, preview_y));
+    let _ = preview_window.set_position(LogicalPosition::new(preview_x, main_y));
 
     if !PREVIEW_VISIBLE.load(Ordering::SeqCst) {
         let _ = preview_window.show();

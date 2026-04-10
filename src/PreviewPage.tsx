@@ -63,13 +63,14 @@ function PreviewPage() {
   return (
     <div className="preview-popup glass-bg h-full flex flex-col rounded-xl border border-white/10 overflow-hidden">
       {/* Content area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 min-h-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 min-h-0">
         {isDataImage ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full w-full">
             <img
               src={data.content ?? undefined}
               alt="clipboard image"
               className="max-w-full max-h-full object-contain rounded-lg"
+              style={{ minHeight: 0 }}
             />
           </div>
         ) : isImage ? (
@@ -87,8 +88,8 @@ function PreviewPage() {
       </div>
 
       {/* Metadata bar */}
-      <div className="flex-shrink-0 px-4 py-2.5 border-t border-white/8 bg-white/[0.02]">
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-white/40 text-[11px]">
+      <div className="flex-shrink-0 px-3 py-2 border-t border-white/8 bg-white/[0.02]">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-white/40 text-[11px]">
           {isImage && dimensions && (
             <span>{dimensions[1]}×{dimensions[2]}</span>
           )}
@@ -98,16 +99,13 @@ function PreviewPage() {
             </span>
           )}
           <span>
-            Copied {data.copy_count} time{data.copy_count !== 1 ? "s" : ""}
-          </span>
-          <span title={formatDate(data.first_copied_at)}>
-            First: {timeAgo(data.first_copied_at)}
+            Copied {data.copy_count}×
           </span>
           <span title={formatDate(data.last_copied_at)}>
-            Last: {timeAgo(data.last_copied_at)}
+            {timeAgo(data.last_copied_at)}
           </span>
           {data.is_pinned && (
-            <span className="text-yellow-400/60">📌 Pinned</span>
+            <span className="text-yellow-400/60">📌</span>
           )}
         </div>
       </div>

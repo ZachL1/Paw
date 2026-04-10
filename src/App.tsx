@@ -22,32 +22,6 @@ export interface HistoryItem {
 }
 
 const PREVIEW_DELAY_MS = 500;
-const METADATA_BAR_H = 40;
-const PADDING = 32;
-
-// Size hints are just content-ideal sizes; Rust will clamp to available screen space
-function computeSizeHint(item: HistoryItem, _content: string): { w: number; h: number } {
-  if (item.content_type === "image") {
-    const match = item.title.match(/(\d+)\s*x\s*(\d+)/i);
-    if (match) {
-      const imgW = parseInt(match[1], 10);
-      const imgH = parseInt(match[2], 10);
-      const aspect = imgW / imgH;
-      // Request generous size — Rust will clamp to screen
-      let w = Math.min(imgW, 800);
-      let h = w / aspect + METADATA_BAR_H + PADDING;
-      if (h > 900) {
-        h = 900;
-        w = (h - METADATA_BAR_H - PADDING) * aspect;
-      }
-      return { w: Math.round(Math.max(w, 300)), h: Math.round(Math.max(h, 200)) };
-    }
-    return { w: 500, h: 450 };
-  }
-
-  // Text: request a comfortable reading width, let Rust clamp
-  return { w: 480, h: 400 };
-}
 
 function App() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -99,9 +73,6 @@ function App() {
           ? "data:image/png;base64," + item.thumbnail
           : item.title;
 
-      // Calculate size hint based on content
-      const sizeHint = computeSizeHint(item, content);
-
       const previewData = {
         content,
         content_type: item.content_type,
@@ -112,7 +83,7 @@ function App() {
         copy_count: item.copy_count,
       };
 
-      await invoke("show_preview", { data: previewData, sizeHint });
+      await invoke("show_preview", { data: previewData });
       previewVisibleRef.current = true;
 
       if (cached) return;
@@ -122,8 +93,7 @@ function App() {
       if (previewRequestId.current !== requestId) return;
 
       contentCacheRef.current.set(item.id, fullContent);
-      const fullSizeHint = computeSizeHint(item, fullContent);
-      await invoke("show_preview", { data: { ...previewData, content: fullContent }, sizeHint: fullSizeHint });
+      await invoke("show_preview", { data: { ...previewData, content: fullContent } });
     } catch (e) {
       console.error("Failed to show preview:", e);
     }
