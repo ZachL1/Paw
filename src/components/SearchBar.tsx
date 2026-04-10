@@ -4,10 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 interface SearchBarProps {
   query: string;
   onQueryChange: (query: string) => void;
-  itemCount: number;
 }
 
-function SearchBar({ query, onQueryChange, itemCount }: SearchBarProps) {
+function SearchBar({ query, onQueryChange }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -24,10 +23,10 @@ function SearchBar({ query, onQueryChange, itemCount }: SearchBarProps) {
   }, []);
 
   return (
-    <div className="px-3 pt-3 pb-2 border-b border-white/10">
+    <div className="px-3 pt-2 pb-1.5 border-b border-white/10">
       <div className="relative">
         <svg
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -46,14 +45,20 @@ function SearchBar({ query, onQueryChange, itemCount }: SearchBarProps) {
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Type to search..."
           className="w-full bg-white/5 text-white text-sm placeholder-white/30
-                     pl-9 pr-3 py-2 rounded-md border border-white/10
+                     pl-8 pr-7 py-1.5 rounded-md border border-white/10
                      focus:outline-none focus:border-blue-400/50 focus:bg-white/8
                      transition-colors"
         />
         {query && (
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-white/30">
-            {itemCount} items
-          </span>
+          <button
+            onClick={() => onQueryChange("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+            aria-label="Clear search"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         )}
       </div>
     </div>

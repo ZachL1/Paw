@@ -90,27 +90,18 @@ function App() {
       const item = filteredItems[selectedIndex];
       const requestId = ++previewRequestId.current;
 
-      if (item.content_type === "image") {
-        // Use thumbnail directly for image preview — no backend call needed
-        if (item.thumbnail) {
-          setPreviewContent(`data:image/png;base64,${item.thumbnail}`);
-        } else {
-          setPreviewContent(null);
-        }
-      } else {
-        setPreviewContent(null);
-        invoke<string>("get_item_content", { id: item.id })
-          .then((content) => {
-            if (previewRequestId.current === requestId) {
-              setPreviewContent(content);
-            }
-          })
-          .catch(() => {
-            if (previewRequestId.current === requestId) {
-              setPreviewContent(null);
-            }
-          });
-      }
+      setPreviewContent(null);
+      invoke<string>("get_item_content", { id: item.id })
+        .then((content) => {
+          if (previewRequestId.current === requestId) {
+            setPreviewContent(content);
+          }
+        })
+        .catch(() => {
+          if (previewRequestId.current === requestId) {
+            setPreviewContent(null);
+          }
+        });
     }
   }, [selectedIndex, showPreview, filteredItems]);
 
@@ -211,6 +202,19 @@ function App() {
           e.preventDefault();
           setShowSettings((s) => !s);
           break;
+        case e.key >= "1" && e.key <= "9" && (isMac ? e.metaKey : e.ctrlKey): {
+          e.preventDefault();
+          const n = parseInt(e.key, 10);
+          const unpinnedStart = filteredItems.findIndex((item) => !item.is_pinned);
+          if (unpinnedStart !== -1) {
+            const targetIndex = unpinnedStart + (n - 1);
+            if (targetIndex < filteredItems.length && !filteredItems[targetIndex].is_pinned) {
+              setSelectedIndex(targetIndex);
+              handleSelect(filteredItems[targetIndex]);
+            }
+          }
+          break;
+        }
       }
     },
     [filteredItems, selectedIndex, handleSelect, handleDelete, handleTogglePin, showPreview]
@@ -230,9 +234,9 @@ function App() {
       {/* Drag handle */}
       <div
         data-tauri-drag-region
-        className="h-5 flex-shrink-0 flex items-center justify-center cursor-move"
+        className="h-4 flex-shrink-0 flex items-center justify-center cursor-move"
       >
-        <div className="w-8 h-1 rounded-full bg-white/20" />
+        <div className="w-6 h-0.5 rounded-full bg-white/20" />
       </div>
 
       {showSettings ? (
@@ -244,7 +248,6 @@ function App() {
             <SearchBar
               query={query}
               onQueryChange={setQuery}
-              itemCount={filteredItems.length}
             />
             <HistoryList
               ref={listRef}
@@ -262,12 +265,12 @@ function App() {
           </div>
 
           {/* Preview panel */}
-          {showPreview && (
+          <div className={`overflow-hidden transition-all duration-200 ease-in-out ${showPreview ? "w-72 opacity-100" : "w-0 opacity-0"}`}>
             <PreviewPanel
               item={filteredItems[selectedIndex] || null}
               content={previewContent}
             />
-          )}
+          </div>
         </div>
       )}
     </div>

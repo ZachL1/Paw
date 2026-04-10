@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --bg-opacity: 0.85;
+  --bg-opacity: 0.88;
+  --accent: 210, 130, 255;
+  --transition-speed: 180ms;
 }
 
 html,
@@ -15,37 +17,111 @@ body,
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism background */
+/* --- Glass background --- */
 .glass-bg {
-  background: rgba(30, 30, 46, var(--bg-opacity));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(22, 22, 36, var(--bg-opacity));
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
 }
 
-/* Custom scrollbar */
+/* --- Scrollbar --- */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.22);
 }
 
-/* Selected item highlight */
+/* --- Item states --- */
 .item-selected {
-  background: rgba(59, 130, 246, 0.3) !important;
+  background: rgba(var(--accent), 0.18);
+  border-radius: 8px;
+  text-shadow: 0 0 8px rgba(var(--accent), 0.3);
 }
 
-/* Search highlight */
+.item-hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+/* --- Search highlight --- */
 .search-highlight {
-  color: #60a5fa;
+  color: rgb(var(--accent));
   font-weight: 600;
+}
+
+/* --- Focus styles --- */
+*:focus-visible {
+  outline: 2px solid rgba(var(--accent), 0.5);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* --- Preview panel animation --- */
+.preview-enter {
+  animation: preview-slide-in var(--transition-speed) ease-out forwards;
+}
+
+.preview-exit {
+  animation: preview-slide-out var(--transition-speed) ease-in forwards;
+}
+
+@keyframes preview-slide-in {
+  from { width: 0; opacity: 0; }
+  to   { width: var(--preview-width, 340px); opacity: 1; }
+}
+
+@keyframes preview-slide-out {
+  from { width: var(--preview-width, 340px); opacity: 1; }
+  to   { width: 0; opacity: 0; }
+}
+
+/* --- Section divider (pinned / unpinned) --- */
+.section-divider {
+  height: 1px;
+  margin: 4px 12px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+}
+
+/* --- Shortcut badge (⌘1-9) --- */
+.shortcut-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+/* --- Transition utilities --- */
+.transition-width {
+  transition: width var(--transition-speed) ease;
+}
+
+.transition-slide {
+  transition:
+    width var(--transition-speed) ease,
+    opacity var(--transition-speed) ease;
 }

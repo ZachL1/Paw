@@ -7,29 +7,21 @@ interface FooterProps {
 }
 
 function Footer({ itemCount, onClearAll, showPreview }: FooterProps) {
+  const mod = isMac ? "⌥" : "Alt+";
+
   return (
-    <div className="px-3 py-2 border-t border-white/10 flex items-center justify-between">
-      <span className="text-white/30 text-xs">{itemCount} items</span>
-      <div className="flex gap-2 text-[10px] text-white/30">
+    <div className="group px-3 py-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-white/25">
+      <span>{itemCount} items</span>
+      <div className="flex items-center gap-1">
         <span>
-          <kbd className="px-1 py-0.5 bg-white/10 rounded">↑↓</kbd> nav
-        </span>
-        <span>
-          <kbd className="px-1 py-0.5 bg-white/10 rounded">↵</kbd> paste
-        </span>
-        <span>
-          <kbd className="px-1 py-0.5 bg-white/10 rounded">{showPreview ? "←" : "→"}</kbd>{" "}
-          preview
-        </span>
-        <span>
-          <kbd className="px-1 py-0.5 bg-white/10 rounded">{isMac ? "⌥P" : "Alt+P"}</kbd> pin
+          ↑↓ nav · ↵ paste · {showPreview ? "←" : "→"} preview · {mod}P pin
         </span>
         {itemCount > 0 && (
           <button
             onClick={onClearAll}
-            className="text-red-400/40 hover:text-red-400 transition-colors"
+            className="ml-1 opacity-0 group-hover:opacity-100 text-red-400/50 hover:text-red-400 transition-opacity"
           >
-            clear
+            · clear
           </button>
         )}
       </div>
