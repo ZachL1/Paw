@@ -50,6 +50,7 @@
         "icons/icon.icns"
       ]
     },
+    "macOSPrivateApi": true,
     "security": {
       "csp": null
     },
