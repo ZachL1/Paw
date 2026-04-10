@@ -60,20 +60,6 @@
         "skipTaskbar": true,
         "center": true,
         "focus": true
-      },
-      {
-        "title": "Paw Preview",
-        "label": "preview",
-        "url": "index.html?preview=1",
-        "width": 480,
-        "height": 500,
-        "resizable": false,
-        "decorations": false,
-        "transparent": false,
-        "visible": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "focus": false
       }
     ],
     "systemTray": {

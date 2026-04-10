@@ -22,7 +22,7 @@ Built with **Tauri + Rust + React + TypeScript**.
 - 🔍 **Fuzzy search** — type to filter history instantly
 - ⌨️ **Keyboard-first** — full keyboard navigation, no mouse needed
 - 📌 **Pin items** — keep frequently used snippets at the top
-- 👁️ **Preview panel** — see full content before pasting
+- 👁️ **Slideout preview** — same-window preview panel for full content
 - 🎯 **Auto-paste** — select an item and it pastes to the active app
 - ⚙️ **Configurable** — hotkey, history size, poll interval and more
 - 🪶 **Lightweight** — ~4MB deb package, ~11MB binary, minimal memory usage
@@ -71,7 +71,7 @@ sudo rpm -i paw-0.1.0-1.x86_64.rpm
 | `↑` `↓` / `Ctrl+P` `Ctrl+N` | Navigate up/down |
 | `Enter` | Paste selected item |
 | `Escape` | Close preview / close window |
-| `→` | Open preview panel |
+| `→` | Open preview immediately |
 | `←` | Close preview panel |
 | `Alt+P` | Pin/unpin selected item |
 | `Alt+Delete` | Delete selected item |

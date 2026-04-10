@@ -3,16 +3,18 @@ import type { HistoryItem } from "../App";
 interface PreviewPanelProps {
   item: HistoryItem | null;
   content: string | null;
+  loading: boolean;
+  placement: "left" | "right";
 }
 
-function timeAgo(dateStr: string): string {
-  const now = new Date();
+function formatDate(dateStr: string): string {
   const date = new Date(dateStr + "Z");
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function countLines(text: string): number {
@@ -24,81 +26,76 @@ function parseDimensions(title: string): string | null {
   return match ? `${match[1]}×${match[2]}` : null;
 }
 
-function PreviewPanel({ item, content }: PreviewPanelProps) {
+function PreviewPanel({
+  item,
+  content,
+  loading,
+  placement: _placement,
+}: PreviewPanelProps) {
   if (!item) {
     return (
-      <div className="w-72 border-l border-white/10 flex items-center justify-center text-white/25 text-sm transition-all duration-200 ease-in-out">
-        No item selected
+      <div className="preview-popup h-full flex items-center justify-center text-white/25 text-sm">
+        Loading preview...
       </div>
     );
   }
 
   const isImage = item.content_type === "image";
   const isDataImage = content?.startsWith("data:image/");
-  const textContent = content || item.title;
+  const textContent = content || item.content || item.title;
   const charCount = textContent.length;
   const lineCount = countLines(textContent);
   const dimensions = isImage ? parseDimensions(item.title) : null;
 
   return (
-    <div className="w-72 border-l border-white/10 flex flex-col transition-all duration-200 ease-in-out">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-white/10 flex items-center gap-1.5">
-        <span className="text-white/50 text-xs">
-          {isImage ? "🖼 Image" : "📄 Text"}
-        </span>
-        {item.is_pinned && <span className="text-[11px]" title="Pinned">📌</span>}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {isDataImage ? (
-          <div className="flex flex-col items-center gap-2">
-            <div className="bg-white/5 rounded-lg p-2 border border-white/5">
+    <div className="preview-popup h-full flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 min-h-0">
+        {isImage ? (
+          loading ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-white/35">
+              <div className="w-7 h-7 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
+              <span className="text-sm">Loading image preview...</span>
+            </div>
+          ) : isDataImage ? (
+            <div className="flex items-center justify-center h-full w-full">
               <img
                 src={content ?? undefined}
                 alt="clipboard image"
-                className="max-w-full max-h-[300px] object-contain rounded"
+                className="max-w-full max-h-full object-contain rounded"
+                style={{ minHeight: 0 }}
               />
             </div>
-            {dimensions && (
-              <span className="text-white/30 text-[11px]">{dimensions}</span>
-            )}
-          </div>
-        ) : isImage ? (
-          <div className="flex flex-col items-center gap-1 py-4">
-            <span className="text-white/20 text-2xl">🖼</span>
-            <span className="text-white/30 text-[11px]">
-              Image{dimensions ? ` · ${dimensions}` : ""}
-            </span>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-white/30">
+              <span className="text-4xl">🖼</span>
+              <span className="text-sm">
+                Image{dimensions ? ` · ${dimensions}` : ""}
+              </span>
+            </div>
+          )
         ) : (
-          <pre className="text-white/80 text-[13px] whitespace-pre-wrap break-words font-mono leading-[1.6]">
+          <pre className="text-white/85 text-[13px] whitespace-pre-wrap break-words font-mono leading-relaxed select-text">
             {textContent}
           </pre>
         )}
       </div>
 
-      {/* Metadata */}
-      <div className="px-3 py-2 border-t border-white/10 grid grid-cols-2 gap-x-2 gap-y-0.5 text-white/40 text-[11px]">
-        <span>Type</span>
-        <span className="text-right">
-          {isImage ? `Image${dimensions ? ` (${dimensions})` : ""}` : "Text"}
-        </span>
-        <span>Copied</span>
-        <span className="text-right">
-          {item.copy_count} time{item.copy_count !== 1 ? "s" : ""}
-        </span>
-        <span>Last</span>
-        <span className="text-right">{timeAgo(item.last_copied_at)}</span>
-        {!isImage && (
-          <>
-            <span>Size</span>
-            <span className="text-right">
-              {lineCount} line{lineCount !== 1 ? "s" : ""} · {charCount} char{charCount !== 1 ? "s" : ""}
-            </span>
-          </>
+      <div className="flex-shrink-0 px-3 py-2 border-t border-white/8 bg-white/[0.02] space-y-0.5">
+        {item.source_app && (
+          <div className="text-white/40 text-[11px]">来源应用: {item.source_app}</div>
         )}
+        <div className="text-white/40 text-[11px]">
+          首次复制时间: {formatDate(item.first_copied_at)}
+        </div>
+        <div className="text-white/40 text-[11px]">
+          上次复制时间: {formatDate(item.last_copied_at)}
+        </div>
+        <div className="text-white/40 text-[11px]">
+          复制次数: {item.copy_count}
+          {isImage && dimensions && ` · ${dimensions}`}
+          {!isImage && ` · ${lineCount} 行 · ${charCount} 字符`}
+          {item.is_pinned && " · 📌 已固定"}
+        </div>
       </div>
     </div>
   );

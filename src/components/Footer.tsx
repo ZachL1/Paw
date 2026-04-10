@@ -13,7 +13,7 @@ function Footer({ itemCount, onClearAll }: FooterProps) {
       <span>{itemCount} items</span>
       <div className="flex items-center gap-1">
         <span>
-          ↑↓ nav · ↵ paste · {mod}P pin
+          ↑↓ nav · → preview · ← close · ↵ paste · {mod}P pin
         </span>
         {itemCount > 0 && (
           <button
