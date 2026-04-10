@@ -176,27 +176,97 @@ fn show_preview(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
     let main_w = size.width as f64 / scale_factor;
     let main_h = size.height as f64 / scale_factor;
 
-    let screen_max_x = if let Ok(Some(monitor)) = main_window.current_monitor() {
+    let (screen_x, screen_w, screen_y, screen_h) = if let Ok(Some(monitor)) = main_window.current_monitor() {
         let mp = monitor.position();
         let ms = monitor.size();
-        (mp.x as f64 + ms.width as f64) / scale_factor
+        (
+            mp.x as f64 / scale_factor,
+            ms.width as f64 / scale_factor,
+            mp.y as f64 / scale_factor,
+            ms.height as f64 / scale_factor,
+        )
     } else {
-        1920.0
+        (0.0, 1920.0, 0.0, 1080.0)
     };
 
-    // Fixed preview width (like Maccy's default 400px), height matches main window
-    let preview_w: f64 = 400.0;
-    let preview_h: f64 = main_h;
+    let is_image = data.get("content_type")
+        .and_then(|v| v.as_str())
+        .map(|s| s == "image")
+        .unwrap_or(false);
 
-    // Place flush against main window: prefer right, fall back to left
-    let preview_x = if main_x + main_w + preview_w <= screen_max_x {
-        main_x + main_w  // Flush right
+    let (preview_w, preview_h, preview_x, preview_y) = if is_image {
+        // Images: large preview, adapt to image aspect ratio
+        // Parse dimensions from title like "1920 x 1080 image"
+        let (img_w, img_h) = data.get("title")
+            .and_then(|v| v.as_str())
+            .and_then(|title| {
+                let re_like: Vec<&str> = title.split('x').collect();
+                if re_like.len() >= 2 {
+                    let w: Option<f64> = re_like[0].trim().split_whitespace().last()
+                        .and_then(|s| s.parse().ok());
+                    let h: Option<f64> = re_like[1].trim().split_whitespace().next()
+                        .and_then(|s| s.parse().ok());
+                    match (w, h) {
+                        (Some(w), Some(h)) => Some((w, h)),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap_or((800.0, 600.0));
+
+        let aspect = img_w / img_h;
+        let metadata_h = 60.0; // metadata bar height
+
+        // Use up to 70% of screen for preview
+        let max_w = screen_w * 0.7;
+        let max_h = screen_h * 0.7;
+
+        // Fit image preserving aspect ratio within bounds
+        let mut pw = (max_h - metadata_h) * aspect;
+        let mut ph = max_h;
+        if pw > max_w {
+            pw = max_w;
+            ph = pw / aspect + metadata_h;
+        }
+        pw = pw.max(300.0);
+        ph = ph.max(250.0);
+
+        // Position: center below main window if space, otherwise center on screen
+        let space_below = (screen_y + screen_h) - (main_y + main_h);
+        let (px, py) = if space_below >= ph + 8.0 {
+            // Below main window, centered horizontally on main
+            let x = (main_x + main_w / 2.0 - pw / 2.0)
+                .max(screen_x)
+                .min(screen_x + screen_w - pw);
+            let y = main_y + main_h + 8.0;
+            (x, y)
+        } else {
+            // Center on screen
+            let x = (screen_x + (screen_w - pw) / 2.0).max(screen_x);
+            let y = (screen_y + (screen_h - ph) / 2.0).max(screen_y);
+            (x, y)
+        };
+
+        (pw, ph, px, py)
     } else {
-        main_x - preview_w  // Flush left
+        // Text: side panel, 400px wide, flush against main window
+        let pw = 400.0_f64;
+        let ph = main_h;
+
+        let screen_max_x = screen_x + screen_w;
+        let px = if main_x + main_w + pw <= screen_max_x {
+            main_x + main_w  // flush right
+        } else {
+            main_x - pw  // flush left
+        };
+
+        (pw, ph, px, main_y)
     };
 
     let _ = preview_window.set_size(LogicalSize::new(preview_w, preview_h));
-    let _ = preview_window.set_position(LogicalPosition::new(preview_x, main_y));
+    let _ = preview_window.set_position(LogicalPosition::new(preview_x, preview_y));
 
     if !PREVIEW_VISIBLE.load(Ordering::SeqCst) {
         let _ = preview_window.show();
