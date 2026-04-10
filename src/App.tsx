@@ -34,13 +34,15 @@ function App() {
   const previewVisibleRef = useRef(false);
   const previewRequestId = useRef(0);
   const previewItemIdRef = useRef<number | null>(null);
-  // Keep a ref to filteredItems so callbacks can access latest without re-creating
   const filteredItemsRef = useRef<HistoryItem[]>([]);
+  // Cache full content by item id to avoid repeated IPC calls
+  const contentCacheRef = useRef<Map<number, string>>(new Map());
 
   const loadHistory = useCallback(async () => {
     try {
       const history = await invoke<HistoryItem[]>("get_history");
       setItems(history);
+      contentCacheRef.current.clear();
     } catch (e) {
       console.error("Failed to load history:", e);
     }
@@ -57,7 +59,6 @@ function App() {
   }, []);
 
   const showPreviewFor = useCallback(async (item: HistoryItem) => {
-    // Skip if already showing this exact item
     if (previewItemIdRef.current === item.id && previewVisibleRef.current) {
       return;
     }
@@ -65,11 +66,13 @@ function App() {
     const requestId = ++previewRequestId.current;
 
     try {
-      // Send quick preview immediately with thumbnail/title
+      const cached = contentCacheRef.current.get(item.id);
       const quickData = {
-        content: item.content_type === "image" && item.thumbnail
-          ? "data:image/png;base64," + item.thumbnail
-          : item.title,
+        content: cached
+          ? cached
+          : item.content_type === "image" && item.thumbnail
+            ? "data:image/png;base64," + item.thumbnail
+            : item.title,
         content_type: item.content_type,
         title: item.title,
         is_pinned: item.is_pinned,
@@ -80,12 +83,15 @@ function App() {
 
       await invoke("show_preview", { data: quickData });
       previewVisibleRef.current = true;
+
+      // If we already have cached full content, no need for phase 2
+      if (cached) return;
       if (previewRequestId.current !== requestId) return;
 
-      // Then load full content asynchronously
       const content = await invoke<string>("get_item_content", { id: item.id });
       if (previewRequestId.current !== requestId) return;
 
+      contentCacheRef.current.set(item.id, content);
       await invoke("show_preview", { data: { ...quickData, content } });
     } catch (e) {
       console.error("Failed to show preview:", e);
