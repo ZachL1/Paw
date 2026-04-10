@@ -45,7 +45,7 @@ function PreviewPage() {
 
   if (!data || !data.content) {
     return (
-      <div className="preview-popup glass-bg h-full flex items-center justify-center rounded-xl border border-white/10">
+      <div className="preview-popup h-full flex items-center justify-center rounded-xl border border-white/10">
         <span className="text-white/25 text-sm">Loading...</span>
       </div>
     );
@@ -61,7 +61,7 @@ function PreviewPage() {
     : null;
 
   return (
-    <div className="preview-popup glass-bg h-full flex flex-col border-l border-white/10 overflow-hidden">
+    <div className="preview-popup h-full flex flex-col border-l border-white/10 overflow-hidden">
       {/* Content area — fills all available space */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 min-h-0">
         {isDataImage ? (
