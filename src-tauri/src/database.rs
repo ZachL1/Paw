@@ -61,10 +61,43 @@ impl Database {
         Ok(())
     }
 
+    /// Remove expired items based on auto_clear_days config
+    pub fn clear_expired(&self, days: u32) -> Result<usize, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let deleted = conn.execute(
+            "DELETE FROM history_items WHERE is_pinned = 0 AND last_copied_at < datetime('now', ?1)",
+            params![format!("-{} days", days)],
+        )?;
+        Ok(deleted)
+    }
+
+    /// Trim history to keep at most max_items unpinned entries
+    pub fn trim_to_max(&self, max_items: usize) -> Result<usize, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let unpinned_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM history_items WHERE is_pinned = 0",
+            [],
+            |row| row.get(0),
+        )?;
+        if unpinned_count as usize <= max_items {
+            return Ok(0);
+        }
+        let to_delete = unpinned_count as usize - max_items;
+        let deleted = conn.execute(
+            "DELETE FROM history_items WHERE id IN (
+                SELECT id FROM history_items WHERE is_pinned = 0
+                ORDER BY last_copied_at ASC LIMIT ?1
+            )",
+            params![to_delete],
+        )?;
+        Ok(deleted)
+    }
+
     pub fn add_item(
         &self,
         content: &str,
         content_type: &str,
+        source_app: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let title = truncate_title(content, 200);
@@ -79,13 +112,13 @@ impl Database {
 
         if let Some(id) = existing {
             conn.execute(
-                "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1 WHERE id = ?1",
-                params![id],
+                "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1, source_app = COALESCE(?2, source_app) WHERE id = ?1",
+                params![id, source_app],
             )?;
         } else {
             conn.execute(
-                "INSERT INTO history_items (content_type, content, title) VALUES (?1, ?2, ?3)",
-                params![content_type, content, title],
+                "INSERT INTO history_items (content_type, content, title, source_app) VALUES (?1, ?2, ?3, ?4)",
+                params![content_type, content, title, source_app],
             )?;
         }
         Ok(())
@@ -98,6 +131,7 @@ impl Database {
         hash: &str,
         width: u32,
         height: u32,
+        source_app: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let title = format!("Image {}×{}", width, height);
@@ -113,31 +147,69 @@ impl Database {
 
         if let Some(id) = existing {
             conn.execute(
-                "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1 WHERE id = ?1",
-                params![id],
+                "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1, source_app = COALESCE(?2, source_app) WHERE id = ?1",
+                params![id, source_app],
             )?;
         } else {
             let thumb = generate_thumbnail_base64(png_bytes);
             conn.execute(
-                "INSERT INTO history_items (content_type, content, content_blob, thumbnail, title) VALUES ('image', ?1, ?2, ?3, ?4)",
-                params![hash, png_bytes, thumb, title],
+                "INSERT INTO history_items (content_type, content, content_blob, thumbnail, title, source_app) VALUES ('image', ?1, ?2, ?3, ?4, ?5)",
+                params![hash, png_bytes, thumb, title, source_app],
             )?;
         }
         Ok(())
     }
 
-    pub fn get_all(&self) -> Result<Vec<HistoryItem>, Box<dyn std::error::Error>> {
+    pub fn get_all(&self, max_items: usize) -> Result<Vec<HistoryItem>, Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, content_type, content, thumbnail, title, source_app,
                     first_copied_at, last_copied_at, copy_count, is_pinned
              FROM history_items
              ORDER BY is_pinned DESC, last_copied_at DESC
-             LIMIT 1000",
+             LIMIT ?1",
         )?;
 
         let items = stmt
-            .query_map([], |row| {
+            .query_map(params![max_items], |row| {
+                Ok(HistoryItem {
+                    id: row.get(0)?,
+                    content_type: row.get(1)?,
+                    content: row.get(2)?,
+                    title: row.get(4)?,
+                    source_app: row.get(5)?,
+                    first_copied_at: row.get(6)?,
+                    last_copied_at: row.get(7)?,
+                    copy_count: row.get(8)?,
+                    is_pinned: row.get(9)?,
+                    thumbnail: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(items)
+    }
+
+    /// Search history items by query string (case-insensitive substring match on content and title)
+    pub fn search(&self, query: &str, max_items: usize) -> Result<Vec<HistoryItem>, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        // Escape LIKE wildcards so user input is treated as literal text
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{}%", escaped);
+        let mut stmt = conn.prepare(
+            "SELECT id, content_type, content, thumbnail, title, source_app,
+                    first_copied_at, last_copied_at, copy_count, is_pinned
+             FROM history_items
+             WHERE title LIKE ?1 ESCAPE '\\' OR content LIKE ?1 ESCAPE '\\'
+             ORDER BY is_pinned DESC, last_copied_at DESC
+             LIMIT ?2",
+        )?;
+
+        let items = stmt
+            .query_map(params![pattern, max_items], |row| {
                 Ok(HistoryItem {
                     id: row.get(0)?,
                     content_type: row.get(1)?,

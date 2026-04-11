@@ -13,6 +13,12 @@ pub struct AppConfig {
     pub ignored_apps: Vec<String>,
     #[serde(default)]
     pub launch_at_startup: bool,
+    #[serde(default = "default_preview_delay")]
+    pub preview_delay_ms: u64,
+}
+
+fn default_preview_delay() -> u64 {
+    1500
 }
 
 impl Default for AppConfig {
@@ -27,6 +33,7 @@ impl Default for AppConfig {
             show_copy_count: true,
             ignored_apps: vec![],
             launch_at_startup: false,
+            preview_delay_ms: 1500,
         }
     }
 }

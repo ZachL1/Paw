@@ -9,6 +9,9 @@ interface HistoryListProps {
   onDelete: (id: number) => void;
   onTogglePin: (id: number) => void;
   onHover?: (index: number) => void;
+  searchQuery?: string;
+  showSourceApp?: boolean;
+  showCopyCount?: boolean;
 }
 
 function timeAgo(dateStr: string): string {
@@ -21,8 +24,28 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
+/** Highlight matching substring in text (case-insensitive) */
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query || query.length < 1) {
+    return <>{text}</>;
+  }
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const idx = lowerText.indexOf(lowerQuery);
+  if (idx === -1) {
+    return <>{text}</>;
+  }
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-400/30 text-yellow-200 rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
 const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
-  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover }, ref) => {
+  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover, searchQuery, showSourceApp = true, showCopyCount = true }, ref) => {
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
     useEffect(() => {
@@ -109,18 +132,25 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                   </span>
                 ) : null}
 
-                {/* Title */}
+                {/* Title with search highlighting */}
                 <span className="text-white/90 text-sm truncate flex-1 leading-snug">
-                  {item.title || "(empty)"}
+                  <HighlightedText text={item.title || "(empty)"} query={searchQuery ?? ""} />
                 </span>
+
+                {/* Source app (if enabled and available) */}
+                {showSourceApp && item.source_app && (
+                  <span className="text-white/15 text-[10px] flex-shrink-0 truncate max-w-[60px]">
+                    {item.source_app}
+                  </span>
+                )}
 
                 {/* Time ago */}
                 <span className="text-white/15 text-xs flex-shrink-0">
                   {timeAgo(item.last_copied_at)}
                 </span>
 
-                {/* Copy count badge (only when >= 3) */}
-                {item.copy_count >= 3 && (
+                {/* Copy count badge (only when >= 3 and enabled) */}
+                {showCopyCount && item.copy_count >= 3 && (
                   <span className="text-white/20 text-[10px] bg-white/5 px-1 rounded flex-shrink-0">
                     ×{item.copy_count}
                   </span>

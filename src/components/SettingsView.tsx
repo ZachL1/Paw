@@ -1,18 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { isMac } from "../utils/platform";
-
-interface Config {
-  hotkey: string;
-  max_history: number;
-  auto_clear_days: number | null;
-  poll_interval_ms: number;
-  paste_on_select: boolean;
-  show_source_app: boolean;
-  show_copy_count: boolean;
-  ignored_apps: string[];
-  launch_at_startup: boolean;
-}
+import type { AppConfig } from "../App";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -162,12 +151,12 @@ function HotkeyRecorder({
 }
 
 function SettingsView({ onClose }: SettingsViewProps) {
-  const [config, setConfig] = useState<Config | null>(null);
+  const [config, setConfig] = useState<AppConfig | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<Config>("get_config").then(setConfig).catch(console.error);
+    invoke<AppConfig>("get_config").then(setConfig).catch(console.error);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -346,6 +335,47 @@ function SettingsView({ onClose }: SettingsViewProps) {
               min={100}
               max={5000}
               step={100}
+              className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
+            />
+          </label>
+
+          <label className="block mb-3">
+            <span className="text-white/70 text-xs">
+              Preview delay (ms)
+            </span>
+            <input
+              type="number"
+              value={config.preview_delay_ms}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  preview_delay_ms: parseInt(e.target.value) || 1500,
+                })
+              }
+              min={200}
+              max={10000}
+              step={100}
+              className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
+            />
+          </label>
+
+          <label className="block mb-3">
+            <span className="text-white/70 text-xs">
+              Ignored apps (comma-separated)
+            </span>
+            <input
+              type="text"
+              value={config.ignored_apps.join(", ")}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  ignored_apps: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0),
+                })
+              }
+              placeholder="e.g. 1Password, KeePassXC"
               className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
             />
           </label>

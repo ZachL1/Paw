@@ -7,7 +7,6 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window";
-import Fuse from "fuse.js";
 import { isMac, isLinux } from "./utils/platform";
 import SearchBar from "./components/SearchBar";
 import HistoryList from "./components/HistoryList";
@@ -28,9 +27,20 @@ export interface HistoryItem {
   thumbnail: string | null;
 }
 
+export interface AppConfig {
+  hotkey: string;
+  max_history: number;
+  auto_clear_days: number | null;
+  poll_interval_ms: number;
+  paste_on_select: boolean;
+  show_source_app: boolean;
+  show_copy_count: boolean;
+  ignored_apps: string[];
+  preview_delay_ms: number;
+}
+
 type PreviewPlacement = "left" | "right";
 
-const PREVIEW_DELAY_MS = 1500;
 const DEFAULT_PREVIEW_WIDTH = 400;
 const MIN_CONTENT_WIDTH = 340;
 const MIN_PREVIEW_WIDTH = 220;
@@ -75,6 +85,8 @@ function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [contentWidth, setContentWidth] = useState(400);
   const [previewWidth, setPreviewWidth] = useState(DEFAULT_PREVIEW_WIDTH);
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,6 +102,8 @@ function App() {
   const previewItemIdRef = useRef<number | null>(null);
   const filteredItemsRef = useRef<HistoryItem[]>([]);
   const contentCacheRef = useRef<Map<number, string>>(new Map());
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appConfigRef = useRef<AppConfig | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -462,7 +476,7 @@ function App() {
 
       previewTimerRef.current = setTimeout(() => {
         void showPreviewFor(item);
-      }, PREVIEW_DELAY_MS);
+      }, appConfigRef.current?.preview_delay_ms ?? 1500);
     },
     [closePreview, showPreviewFor]
   );
@@ -508,6 +522,13 @@ function App() {
       unlistenSettings = fn;
     });
 
+    void listen("config-changed", () => {
+      invoke<AppConfig>("get_config").then((cfg) => {
+        setAppConfig(cfg);
+        appConfigRef.current = cfg;
+      }).catch(console.error);
+    }).then(() => {});
+
     void appWindow.onResized(() => {
       void syncContentWidthFromWindow();
     }).then((fn) => {
@@ -534,31 +555,48 @@ function App() {
     };
   }, [closePreview, hideWindow, loadHistory, syncContentWidthFromWindow]);
 
-  const fuse = useRef(
-    new Fuse<HistoryItem>([], {
-      keys: ["title"],
-      threshold: 0.4,
-      ignoreLocation: true,
-      includeScore: true,
-    })
-  );
+  // Load config on mount
+  useEffect(() => {
+    invoke<AppConfig>("get_config").then((cfg) => {
+      setAppConfig(cfg);
+      appConfigRef.current = cfg;
+    }).catch(console.error);
+  }, []);
+
+  // Search items from backend (debounced) or show all items
+  const [filteredItems, setFilteredItems] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
-    fuse.current.setCollection(items);
-  }, [items]);
+    if (!query) {
+      setFilteredItems(items);
+      return;
+    }
 
-  const filteredItems = (() => {
-    if (!query) return items;
-    // Fuse.js fuzzy results (now location-independent)
-    const fuseResults = fuse.current.search(query).map((r) => r.item);
-    // Also include exact substring matches that Fuse may have scored too low
-    const lowerQuery = query.toLowerCase();
-    const fuseIds = new Set(fuseResults.map((it) => it.id));
-    const substringMatches = items.filter(
-      (it) => !fuseIds.has(it.id) && it.title.toLowerCase().includes(lowerQuery)
-    );
-    return [...fuseResults, ...substringMatches];
-  })();
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await invoke<HistoryItem[]>("search_history", { query });
+        setFilteredItems(
+          results.map((item) => ({
+            ...item,
+            title: buildDisplayTitle(item),
+          }))
+        );
+      } catch (e) {
+        console.error("Search failed:", e);
+        setFilteredItems(items);
+      }
+    }, 150);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [query, items]);
 
   filteredItemsRef.current = filteredItems;
 
@@ -587,7 +625,12 @@ function App() {
       }
 
       try {
-        await invoke("paste_item", { id: item.id });
+        const shouldPaste = appConfigRef.current?.paste_on_select ?? true;
+        if (shouldPaste) {
+          await invoke("paste_item", { id: item.id });
+        } else {
+          await invoke("copy_item", { id: item.id });
+        }
         if (wasOpen) {
           previewOpenRef.current = false;
           await resizeWindowForPreview(false, placement, width);
@@ -673,6 +716,11 @@ function App() {
   );
 
   const handleClearAll = useCallback(async () => {
+    setShowClearConfirm(true);
+  }, []);
+
+  const confirmClearAll = useCallback(async () => {
+    setShowClearConfirm(false);
     try {
       await closePreview();
       contentCacheRef.current.clear();
@@ -814,6 +862,9 @@ function App() {
         onDelete={handleDelete}
         onTogglePin={handleTogglePin}
         onHover={handleHover}
+        searchQuery={query}
+        showSourceApp={appConfig?.show_source_app ?? true}
+        showCopyCount={appConfig?.show_copy_count ?? true}
       />
       <Footer itemCount={filteredItems.length} onClearAll={handleClearAll} />
     </div>
@@ -861,7 +912,14 @@ function App() {
       </div>
 
       {showSettings ? (
-        <SettingsView onClose={() => setShowSettings(false)} />
+        <SettingsView onClose={() => {
+          setShowSettings(false);
+          // Reload config after settings close
+          invoke<AppConfig>("get_config").then((cfg) => {
+            setAppConfig(cfg);
+            appConfigRef.current = cfg;
+          }).catch(console.error);
+        }} />
       ) : (
         <div className="flex flex-1 min-h-0">
           {previewPlacement === "left" && previewPanel}
@@ -869,6 +927,29 @@ function App() {
           {mainContent}
           {previewPlacement === "right" && previewDivider}
           {previewPlacement === "right" && previewPanel}
+        </div>
+      )}
+
+      {/* Clear All confirmation overlay */}
+      {showClearConfirm && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-lg">
+          <div className="bg-[#1e1e2e] border border-white/15 rounded-lg px-5 py-4 max-w-[280px] text-center shadow-xl">
+            <p className="text-white/80 text-sm mb-3">Clear all unpinned items?</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="text-white/50 hover:text-white/80 text-xs px-3 py-1.5 rounded border border-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmClearAll}
+                className="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1.5 rounded transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

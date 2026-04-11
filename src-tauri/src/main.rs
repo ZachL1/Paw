@@ -140,8 +140,22 @@ fn position_window_near_cursor(window: &tauri::Window) {
 }
 
 #[tauri::command]
-fn get_history(state: tauri::State<'_, Arc<Database>>) -> Result<Vec<HistoryItem>, String> {
-    state.get_all().map_err(|e| e.to_string())
+fn get_history(
+    state: tauri::State<'_, Arc<Database>>,
+    config: tauri::State<'_, Arc<Mutex<AppConfig>>>,
+) -> Result<Vec<HistoryItem>, String> {
+    let max = config.lock().unwrap().max_history;
+    state.get_all(max).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn search_history(
+    query: String,
+    state: tauri::State<'_, Arc<Database>>,
+    config: tauri::State<'_, Arc<Mutex<AppConfig>>>,
+) -> Result<Vec<HistoryItem>, String> {
+    let max = config.lock().unwrap().max_history;
+    state.search(&query, max).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -261,15 +275,28 @@ fn save_config(
         (old_hotkey, old_autostart)
     };
 
-    // Re-register hotkey if changed
+    // Re-register hotkey if changed — register new FIRST, then unregister old
     if old_hotkey != new_config.hotkey {
         let mut gsm = app.global_shortcut_manager();
-        let _ = gsm.unregister(&old_hotkey);
         let app_handle = app.clone();
         gsm.register(&new_config.hotkey, move || {
             toggle_window(&app_handle);
         })
         .map_err(|e| format!("Invalid hotkey: {}", e))?;
+        // New hotkey registered successfully — safe to unregister old
+        let _ = gsm.unregister(&old_hotkey);
+    }
+
+    // Persist config only after hotkey is confirmed valid
+    {
+        let mut config = state.lock().unwrap();
+        *config = new_config.clone();
+        config.save().map_err(|e| e.to_string())?;
+    }
+
+    // Notify clipboard monitor of config changes (poll interval, ignored apps)
+    if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
+        monitor.update_config(new_config.poll_interval_ms, new_config.ignored_apps.clone());
     }
 
     // Apply autostart if changed
@@ -283,6 +310,58 @@ fn save_config(
 #[tauri::command]
 fn hide_window(app: AppHandle) {
     do_hide(&app);
+}
+
+/// Copy item to clipboard without simulating paste keystroke
+#[tauri::command]
+fn copy_item(
+    id: i64,
+    app: AppHandle,
+    state: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    state.touch_item(id).map_err(|e| e.to_string())?;
+
+    let content_type = state.get_content_type(id).map_err(|e| e.to_string())?;
+
+    if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
+        monitor.suppress_next();
+    }
+
+    if content_type == "image" {
+        let blob = state
+            .get_image_blob(id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Image data not found")?;
+
+        use image::ImageReader;
+        use std::io::Cursor;
+        let img = ImageReader::new(Cursor::new(&blob))
+            .with_guessed_format()
+            .map_err(|e| e.to_string())?
+            .decode()
+            .map_err(|e| e.to_string())?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard
+            .set_image(arboard::ImageData {
+                width: w as usize,
+                height: h as usize,
+                bytes: rgba.into_raw().into(),
+            })
+            .map_err(|e| e.to_string())?;
+    } else {
+        let content = state
+            .get_content_by_id(id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Item not found")?;
+
+        let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+        clipboard.set_text(content).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
 
 fn do_hide(app: &AppHandle) {
@@ -353,6 +432,94 @@ fn do_show(app: &AppHandle) {
     }
 }
 
+/// Get cursor position in logical coordinates
+#[cfg(target_os = "macos")]
+fn get_cursor_position() -> Option<(f64, f64)> {
+    use objc::{msg_send, sel, sel_impl, class};
+    use objc::runtime::Object;
+    unsafe {
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct NSPoint { x: f64, y: f64 }
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct NSSize { width: f64, height: f64 }
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct NSRect { origin: NSPoint, size: NSSize }
+
+        let point: NSPoint = msg_send![class!(NSEvent), mouseLocation];
+
+        // Find the screen containing the cursor for correct Y-flip
+        let screens: *mut Object = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
+            return None;
+        }
+        let count: usize = msg_send![screens, count];
+        let mut screen_height = 0.0_f64;
+        for i in 0..count {
+            let screen: *mut Object = msg_send![screens, objectAtIndex: i];
+            let frame: NSRect = msg_send![screen, frame];
+            if point.x >= frame.origin.x
+                && point.x < frame.origin.x + frame.size.width
+                && point.y >= frame.origin.y
+                && point.y < frame.origin.y + frame.size.height
+            {
+                // Found the screen containing the cursor
+                // Use the primary screen (index 0) height for global coordinate flip
+                let primary: *mut Object = msg_send![screens, objectAtIndex: 0usize];
+                let primary_frame: NSRect = msg_send![primary, frame];
+                screen_height = primary_frame.size.height;
+                break;
+            }
+        }
+        if screen_height == 0.0 {
+            // Fallback to main screen
+            let screen: *mut Object = msg_send![class!(NSScreen), mainScreen];
+            if !screen.is_null() {
+                let frame: NSRect = msg_send![screen, frame];
+                screen_height = frame.size.height;
+            }
+        }
+        if screen_height > 0.0 {
+            let y = screen_height - point.y;
+            Some((point.x, y))
+        } else {
+            Some((point.x, point.y))
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn get_cursor_position() -> Option<(f64, f64)> {
+    if let Ok(output) = std::process::Command::new("xdotool")
+        .args(["getmouselocation", "--shell"])
+        .output()
+    {
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut x = None;
+            let mut y = None;
+            for line in text.lines() {
+                if let Some(val) = line.strip_prefix("X=") {
+                    x = val.parse().ok();
+                } else if let Some(val) = line.strip_prefix("Y=") {
+                    y = val.parse().ok();
+                }
+            }
+            if let (Some(x), Some(y)) = (x, y) {
+                return Some((x, y));
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn get_cursor_position() -> Option<(f64, f64)> {
+    None
+}
+
 fn toggle_window(app: &AppHandle) {
     if WINDOW_VISIBLE.load(Ordering::SeqCst) {
         do_hide(app);
@@ -401,11 +568,28 @@ fn main() {
             let db = Arc::new(Database::new().expect("Failed to initialize database"));
             app.manage(db.clone());
 
+            // Run maintenance: auto-clear expired items and trim to max_history
+            {
+                let cfg = config.lock().unwrap();
+                if let Some(days) = cfg.auto_clear_days {
+                    if let Err(e) = db.clear_expired(days) {
+                        log::error!("Failed to clear expired items: {}", e);
+                    }
+                }
+                if let Err(e) = db.trim_to_max(cfg.max_history) {
+                    log::error!("Failed to trim history: {}", e);
+                }
+            }
+
             let monitor = ClipboardMonitor::new();
             let app_handle = app.handle().clone();
+            let cfg = config.lock().unwrap();
+            let poll_ms = cfg.poll_interval_ms;
+            let ignored = cfg.ignored_apps.clone();
+            drop(cfg);
             monitor.start(db, move || {
                 let _ = app_handle.emit_all("clipboard-changed", ());
-            });
+            }, poll_ms, ignored);
             app.manage(monitor);
 
             let app_handle = app.handle().clone();
@@ -419,9 +603,11 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_history,
+            search_history,
             delete_item,
             clear_history,
             paste_item,
+            copy_item,
             toggle_pin,
             get_item_content,
             get_config,
