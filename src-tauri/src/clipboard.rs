@@ -52,7 +52,7 @@ impl ClipboardMonitor {
 
     pub fn start<F>(&self, db: Arc<Database>, on_change: F, initial_poll_ms: u64, initial_ignored: Vec<String>)
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn(Option<crate::models::HistoryItem>) + Send + Sync + 'static,
     {
         let last_content = self.last_content.clone();
         let running = self.running.clone();
@@ -149,10 +149,15 @@ impl ClipboardMonitor {
                                 }
                             }
 
-                            if let Err(e) = db.add_item(&text, "text", source_app.as_deref()) {
-                                log::error!("Failed to save clipboard text: {}", e);
+                            match db.add_item(&text, "text", source_app.as_deref()) {
+                                Ok(item_id) => {
+                                    let item = db.get_item_by_id(item_id).ok().flatten();
+                                    on_change(item);
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to save clipboard text: {}", e);
+                                }
                             }
-                            on_change();
                             continue;
                         }
                     }
@@ -187,16 +192,21 @@ impl ClipboardMonitor {
                                 img_data.height as u32,
                             ) {
                                 Ok(png_bytes) => {
-                                    if let Err(e) = db.add_image_item(
+                                    match db.add_image_item(
                                         &png_bytes,
                                         &hash,
                                         img_data.width as u32,
                                         img_data.height as u32,
                                         source_app.as_deref(),
                                     ) {
-                                        log::error!("Failed to save clipboard image: {}", e);
+                                        Ok(item_id) => {
+                                            let item = db.get_item_by_id(item_id).ok().flatten();
+                                            on_change(item);
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to save clipboard image: {}", e);
+                                        }
                                     }
-                                    on_change();
                                 }
                                 Err(e) => {
                                     log::error!("Failed to encode image to PNG: {}", e);

@@ -98,7 +98,7 @@ impl Database {
         content: &str,
         content_type: &str,
         source_app: Option<&str>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<i64, Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let title = truncate_title(content, 200);
 
@@ -115,13 +115,14 @@ impl Database {
                 "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1, source_app = COALESCE(?2, source_app) WHERE id = ?1",
                 params![id, source_app],
             )?;
+            Ok(id)
         } else {
             conn.execute(
                 "INSERT INTO history_items (content_type, content, title, source_app) VALUES (?1, ?2, ?3, ?4)",
                 params![content_type, content, title, source_app],
             )?;
+            Ok(conn.last_insert_rowid())
         }
-        Ok(())
     }
 
     /// Store an image item. `hash` is used for dedup, `png_bytes` stored as BLOB.
@@ -132,7 +133,7 @@ impl Database {
         width: u32,
         height: u32,
         source_app: Option<&str>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<i64, Box<dyn std::error::Error>> {
         let conn = self.conn.lock().unwrap();
         let title = format!("Image {}×{}", width, height);
 
@@ -150,14 +151,15 @@ impl Database {
                 "UPDATE history_items SET last_copied_at = datetime('now'), copy_count = copy_count + 1, source_app = COALESCE(?2, source_app) WHERE id = ?1",
                 params![id, source_app],
             )?;
+            Ok(id)
         } else {
             let thumb = generate_thumbnail_base64(png_bytes);
             conn.execute(
                 "INSERT INTO history_items (content_type, content, content_blob, thumbnail, title, source_app) VALUES ('image', ?1, ?2, ?3, ?4, ?5)",
                 params![hash, png_bytes, thumb, title, source_app],
             )?;
+            Ok(conn.last_insert_rowid())
         }
-        Ok(())
     }
 
     pub fn get_all(&self, max_items: usize) -> Result<Vec<HistoryItem>, Box<dyn std::error::Error>> {
@@ -226,6 +228,34 @@ impl Database {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(items)
+    }
+
+    /// Fetch a single item by ID (used for incremental updates)
+    pub fn get_item_by_id(&self, id: i64) -> Result<Option<HistoryItem>, Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let item = conn
+            .query_row(
+                "SELECT id, content_type, content, thumbnail, title, source_app,
+                        first_copied_at, last_copied_at, copy_count, is_pinned
+                 FROM history_items WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok(HistoryItem {
+                        id: row.get(0)?,
+                        content_type: row.get(1)?,
+                        content: row.get(2)?,
+                        title: row.get(4)?,
+                        source_app: row.get(5)?,
+                        first_copied_at: row.get(6)?,
+                        last_copied_at: row.get(7)?,
+                        copy_count: row.get(8)?,
+                        is_pinned: row.get(9)?,
+                        thumbnail: row.get(3)?,
+                    })
+                },
+            )
+            .ok();
+        Ok(item)
     }
 
     pub fn get_image_blob(&self, id: i64) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {

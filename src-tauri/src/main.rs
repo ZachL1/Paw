@@ -587,8 +587,8 @@ fn main() {
             let poll_ms = cfg.poll_interval_ms;
             let ignored = cfg.ignored_apps.clone();
             drop(cfg);
-            monitor.start(db, move || {
-                let _ = app_handle.emit_all("clipboard-changed", ());
+            monitor.start(db, move |item| {
+                let _ = app_handle.emit_all("clipboard-changed", item);
             }, poll_ms, ignored);
             app.manage(monitor);
 

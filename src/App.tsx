@@ -494,8 +494,29 @@ function App() {
     // On Linux, the focus-changed event fires before the window actually receives focus.
     let focusGuardUntil = 0;
 
-    void listen("clipboard-changed", () => {
-      void loadHistory();
+    void listen<HistoryItem | null>("clipboard-changed", (event) => {
+      const newItem = event.payload;
+      if (newItem && newItem.id) {
+        // Incremental update: merge new item into state
+        const maxHistory = appConfigRef.current?.max_history ?? 1000;
+        setItems((prev) => {
+          const filtered = prev.filter((i) => i.id !== newItem.id);
+          const pinned = filtered.filter((i) => i.is_pinned);
+          const unpinned = filtered.filter((i) => !i.is_pinned);
+          // New item goes at start of its section (most recent first)
+          const merged = newItem.is_pinned
+            ? [newItem, ...pinned, ...unpinned]
+            : [...pinned, newItem, ...unpinned];
+          // Enforce max_history: trim oldest unpinned items from the end
+          if (merged.length > maxHistory) {
+            return merged.slice(0, maxHistory);
+          }
+          return merged;
+        });
+      } else {
+        // Fallback: full reload
+        void loadHistory();
+      }
     }).then((fn) => {
       unlistenClipboard = fn;
     });

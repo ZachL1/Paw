@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 /// Enable or disable launching Paw at system startup.
@@ -30,28 +31,33 @@ fn autostart_path() -> Result<PathBuf, String> {
     Ok(home.join(".config").join("autostart").join("paw.desktop"))
 }
 
+fn escape_desktop_exec(path: &str) -> String {
+    path.replace('\\', "\\\\").replace(' ', "\\ ")
+}
+
 #[cfg(target_os = "linux")]
 fn set_autostart_linux(enabled: bool, exe_path: &str) -> Result<(), String> {
     let path = autostart_path()?;
 
     if enabled {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let content = format!(
             "[Desktop Entry]\n\
              Type=Application\n\
              Name=Paw\n\
              Comment=Clipboard manager\n\
-             Exec={exe_path}\n\
+             Exec={}\n\
              Icon=paw\n\
              Hidden=false\n\
              NoDisplay=false\n\
-             X-GNOME-Autostart-enabled=true\n"
+             X-GNOME-Autostart-enabled=true\n",
+            escape_desktop_exec(exe_path)
         );
-        std::fs::write(&path, content).map_err(|e| e.to_string())?;
+        fs::write(&path, content).map_err(|e| e.to_string())?;
     } else if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -72,7 +78,7 @@ fn set_autostart_macos(enabled: bool, exe_path: &str) -> Result<(), String> {
 
     if enabled {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let content = format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -93,18 +99,16 @@ fn set_autostart_macos(enabled: bool, exe_path: &str) -> Result<(), String> {
              </dict>\n\
              </plist>\n"
         );
-        std::fs::write(&path, content).map_err(|e| e.to_string())?;
+        fs::write(&path, content).map_err(|e| e.to_string())?;
         // Load the plist immediately so it takes effect without a reboot
         let _ = std::process::Command::new("launchctl")
             .args(["load", "-w", &path.to_string_lossy()])
             .status();
-    } else {
-        if path.exists() {
-            let _ = std::process::Command::new("launchctl")
-                .args(["unload", "-w", &path.to_string_lossy()])
-                .status();
-            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-        }
+    } else if path.exists() {
+        let _ = std::process::Command::new("launchctl")
+            .args(["unload", "-w", &path.to_string_lossy()])
+            .status();
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
 
     Ok(())
