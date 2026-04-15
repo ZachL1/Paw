@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useMemo, useRef } from "react";
 import type { HistoryItem } from "../App";
-import { isMac } from "../utils/platform";
+import { isMac, isLinux } from "../utils/platform";
 
 interface HistoryListProps {
   items: HistoryItem[];
@@ -28,7 +28,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
     useEffect(() => {
       itemRefs.current[selectedIndex]?.scrollIntoView({
         block: "nearest",
-        behavior: "smooth",
+        behavior: "instant",
       });
     }, [selectedIndex]);
 
@@ -79,7 +79,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                 }}
                 className={`
                   group px-3 py-1 mx-1 rounded cursor-pointer flex items-center gap-2
-                  transition-colors duration-100
+                  ${isLinux ? "" : "transition-colors duration-100"}
                   ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
                 `}
                 onClick={() => onSelect(item)}

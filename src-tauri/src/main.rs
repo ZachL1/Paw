@@ -10,14 +10,25 @@ use clipboard::ClipboardMonitor;
 use models::HistoryItem;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
     SystemTray, SystemTrayEvent, SystemTrayMenu,
 };
 
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
+/// Timestamp (ms since epoch) when do_show was last called.
+/// hide_window command won't hide if called within 600ms of show.
+static LAST_SHOWN_MS: AtomicU64 = AtomicU64::new(0);
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 #[tauri::command]
 fn get_history(state: tauri::State<'_, Arc<Database>>) -> Result<Vec<HistoryItem>, String> {
@@ -160,6 +171,17 @@ fn hide_window(app: AppHandle) {
 }
 
 fn do_hide(app: &AppHandle) {
+    // If the window is already hidden, nothing to do.
+    if !WINDOW_VISIBLE.load(Ordering::SeqCst) {
+        return;
+    }
+    // Don't hide if the window was shown less than 600ms ago.
+    // LAST_SHOWN_MS is stored *before* WINDOW_VISIBLE in do_show, so if we read
+    // WINDOW_VISIBLE=true above (via SeqCst), LAST_SHOWN_MS already holds the new value.
+    let elapsed = now_ms().saturating_sub(LAST_SHOWN_MS.load(Ordering::SeqCst));
+    if elapsed < 600 {
+        return;
+    }
     WINDOW_VISIBLE.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_window("main") {
         let _ = window.hide();
@@ -168,31 +190,37 @@ fn do_hide(app: &AppHandle) {
 
 fn do_show(app: &AppHandle) {
     if let Some(window) = app.get_window("main") {
+        // Store LAST_SHOWN_MS *before* WINDOW_VISIBLE so that a concurrent do_hide
+        // which sees WINDOW_VISIBLE=true (via SeqCst) also sees the fresh timestamp.
+        LAST_SHOWN_MS.store(now_ms(), Ordering::SeqCst);
         WINDOW_VISIBLE.store(true, Ordering::SeqCst);
         let _ = window.show();
         let _ = window.set_focus();
 
         #[cfg(target_os = "linux")]
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            let output = std::process::Command::new("xdotool")
-                .args(["search", "--name", "Paw"])
-                .output();
-            if let Ok(out) = output {
-                let ids = String::from_utf8_lossy(&out.stdout);
-                if let Some(wid) = ids.lines().last() {
-                    let wid = wid.trim();
-                    if !wid.is_empty() {
-                        let _ = std::process::Command::new("xdotool")
-                            .args(["windowactivate", "--sync", wid])
-                            .output();
-                        let _ = std::process::Command::new("xdotool")
-                            .args(["windowfocus", "--sync", wid])
-                            .output();
+        {
+            let pid = std::process::id().to_string();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let output = std::process::Command::new("xdotool")
+                    .args(["search", "--pid", &pid])
+                    .output();
+                if let Ok(out) = output {
+                    let ids = String::from_utf8_lossy(&out.stdout);
+                    if let Some(wid) = ids.lines().last() {
+                        let wid = wid.trim();
+                        if !wid.is_empty() {
+                            let _ = std::process::Command::new("xdotool")
+                                .args(["windowactivate", "--sync", wid])
+                                .output();
+                            let _ = std::process::Command::new("xdotool")
+                                .args(["windowfocus", "--sync", wid])
+                                .output();
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
         #[cfg(target_os = "macos")]
         std::thread::spawn(|| {
@@ -236,10 +264,10 @@ fn main() {
             SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
                 "toggle" => toggle_window(app),
                 "settings" => {
-                    // Emit event to show settings in the frontend
+                    // Use do_show so WINDOW_VISIBLE and LAST_SHOWN_MS are properly set.
+                    // Without this, do_hide sees WINDOW_VISIBLE=false and refuses to hide.
+                    do_show(app);
                     if let Some(window) = app.get_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
                         let _ = window.emit("show-settings", ());
                     }
                 }

@@ -44,7 +44,8 @@ impl ShortcutManager {
     let (method_sender, thread_receiver) = channel::unbounded();
     let (thread_sender, method_receiver) = channel::unbounded();
 
-    if !_window_target.p.is_wayland() {
+    let is_wayland = _window_target.p.is_wayland();
+    if !is_wayland {
       std::thread::spawn(move || {
         let event_loop_channel = event_loop_channel.clone();
         let xlib = xlib::Xlib::open().unwrap();

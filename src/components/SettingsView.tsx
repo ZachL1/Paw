@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { isMac } from "../utils/platform";
 
@@ -15,6 +15,149 @@ interface Config {
 
 interface SettingsViewProps {
   onClose: () => void;
+}
+
+/** Convert a browser KeyboardEvent.code to the tao hotkey key name. */
+function codeToKeyName(code: string): string | null {
+  if (code.startsWith("Key")) return code.slice(3); // KeyV → V
+  if (code.startsWith("Digit")) return code.slice(5); // Digit5 → 5
+  if (/^F\d+$/.test(code)) return code; // F1–F12
+  const map: Record<string, string> = {
+    Space: "Space", Enter: "Enter", Tab: "Tab", Backspace: "Backspace",
+    Escape: "Escape", Delete: "Delete", Insert: "Insert",
+    Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+    ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
+    ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight",
+    Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]",
+    Backslash: "Backslash", Semicolon: ";", Quote: "'",
+    Backquote: "`", Comma: ",", Period: ".", Slash: "/",
+    NumpadMultiply: "NumpadMultiply", NumpadAdd: "NumpadAdd",
+    NumpadSubtract: "NumpadSubtract", NumpadDecimal: "NumpadDecimal",
+    NumpadDivide: "NumpadDivide",
+  };
+  if (code in map) return map[code];
+  // NumpadN
+  const numpad = code.match(/^Numpad(\d)$/);
+  if (numpad) return `Num${numpad[1]}`;
+  return null;
+}
+
+const MODIFIER_CODES = new Set([
+  "ControlLeft", "ControlRight",
+  "AltLeft", "AltRight",
+  "ShiftLeft", "ShiftRight",
+  "MetaLeft", "MetaRight",
+]);
+
+/** Format a hotkey string like "Ctrl+Shift+V" for display. */
+function formatHotkey(hotkey: string): string {
+  return hotkey
+    .split("+")
+    .map((p) => {
+      if (p === "Super") return isMac ? "⌘" : "Super";
+      if (p === "Alt") return isMac ? "⌥" : "Alt";
+      if (p === "Ctrl") return isMac ? "⌃" : "Ctrl";
+      if (p === "Shift") return isMac ? "⇧" : "Shift";
+      return p;
+    })
+    .join(" + ");
+}
+
+function HotkeyRecorder({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (hotkey: string) => void;
+}) {
+  const [recording, setRecording] = useState(false);
+  const [preview, setPreview] = useState<string>("");
+  const divRef = useRef<HTMLDivElement>(null);
+
+  const stopRecording = useCallback(() => {
+    setRecording(false);
+    setPreview("");
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.code === "Escape") {
+        stopRecording();
+        return;
+      }
+
+      const isModifierOnly = MODIFIER_CODES.has(e.code);
+
+      // Build currently held modifiers
+      const mods: string[] = [];
+      if (e.ctrlKey) mods.push("Ctrl");
+      if (e.altKey) mods.push("Alt");
+      if (e.shiftKey) mods.push("Shift");
+      if (e.metaKey) mods.push("Super");
+
+      if (isModifierOnly) {
+        setPreview(mods.join("+") + (mods.length ? "+" : "") + "…");
+        return;
+      }
+
+      // Must have at least one modifier
+      if (mods.length === 0) return;
+
+      const keyName = codeToKeyName(e.code);
+      if (!keyName) return;
+
+      const hotkey = [...mods, keyName].join("+");
+      onChange(hotkey);
+      stopRecording();
+    },
+    [onChange, stopRecording]
+  );
+
+  useEffect(() => {
+    if (recording) {
+      divRef.current?.focus();
+    }
+  }, [recording]);
+
+  return (
+    <div
+      ref={divRef}
+      tabIndex={0}
+      onKeyDown={recording ? handleKeyDown : undefined}
+      onBlur={recording ? stopRecording : undefined}
+      onClick={() => setRecording(true)}
+      className={`
+        mt-1 w-full px-3 py-1.5 rounded border text-sm cursor-pointer
+        flex items-center gap-2 select-none outline-none
+        transition-colors duration-150
+        ${
+          recording
+            ? "bg-blue-500/10 border-blue-400/60 text-blue-300"
+            : "bg-white/5 border-white/10 text-white hover:border-white/25"
+        }
+      `}
+    >
+      {recording ? (
+        <>
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+          <span className="flex-1 font-mono">
+            {preview || "Press shortcut…"}
+          </span>
+          <span className="text-white/30 text-xs">Esc to cancel</span>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 font-mono tracking-wide">
+            {value ? formatHotkey(value) : <span className="text-white/30">Click to record</span>}
+          </span>
+          <span className="text-white/30 text-xs">click to change</span>
+        </>
+      )}
+    </div>
+  );
 }
 
 function SettingsView({ onClose }: SettingsViewProps) {
@@ -69,14 +212,9 @@ function SettingsView({ onClose }: SettingsViewProps) {
 
           <label className="block mb-3">
             <span className="text-white/70 text-xs">Global Hotkey</span>
-            <input
-              type="text"
+            <HotkeyRecorder
               value={config.hotkey}
-              onChange={(e) =>
-                setConfig({ ...config, hotkey: e.target.value })
-              }
-              className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
-              placeholder="e.g. Alt+V, Ctrl+Shift+C"
+              onChange={(hotkey) => setConfig({ ...config, hotkey })}
             />
           </label>
 

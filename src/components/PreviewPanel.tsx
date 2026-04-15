@@ -42,9 +42,12 @@ function PreviewPanel({
 
   const isImage = item.content_type === "image";
   const isDataImage = content?.startsWith("data:image/");
-  const textContent = content || item.content || item.title;
-  const charCount = textContent.length;
-  const lineCount = countLines(textContent);
+  const rawContent = content || item.content || item.title;
+  const MAX_PREVIEW_CHARS = 50000;
+  const truncated = rawContent.length > MAX_PREVIEW_CHARS;
+  const textContent = truncated ? rawContent.slice(0, MAX_PREVIEW_CHARS) : rawContent;
+  const charCount = rawContent.length;
+  const lineCount = countLines(rawContent);
   const dimensions = isImage ? parseDimensions(item.title) : null;
 
   return (
@@ -76,6 +79,11 @@ function PreviewPanel({
         ) : (
           <pre className="text-white/85 text-[13px] whitespace-pre-wrap break-words font-mono leading-relaxed select-text">
             {textContent}
+            {truncated && (
+              <span className="text-white/30 italic">
+                {"\n\n"}… (showing first {MAX_PREVIEW_CHARS.toLocaleString()} of {charCount.toLocaleString()} characters)
+              </span>
+            )}
           </pre>
         )}
       </div>
