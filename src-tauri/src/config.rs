@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub show_source_app: bool,
     pub show_copy_count: bool,
     pub ignored_apps: Vec<String>,
+    #[serde(default)]
+    pub launch_at_startup: bool,
 }
 
 impl Default for AppConfig {
@@ -24,6 +26,7 @@ impl Default for AppConfig {
             show_source_app: true,
             show_copy_count: true,
             ignored_apps: vec![],
+            launch_at_startup: false,
         }
     }
 }

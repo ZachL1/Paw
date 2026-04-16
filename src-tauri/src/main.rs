@@ -1,3 +1,4 @@
+mod autostart;
 mod clipboard;
 mod config;
 mod database;
@@ -143,12 +144,13 @@ fn save_config(
     app: AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
 ) -> Result<(), String> {
-    let old_hotkey = {
+    let (old_hotkey, old_autostart) = {
         let mut config = state.lock().unwrap();
-        let old = config.hotkey.clone();
+        let old_hotkey = config.hotkey.clone();
+        let old_autostart = config.launch_at_startup;
         *config = new_config.clone();
         config.save().map_err(|e| e.to_string())?;
-        old
+        (old_hotkey, old_autostart)
     };
 
     // Re-register hotkey if changed
@@ -160,6 +162,11 @@ fn save_config(
             toggle_window(&app_handle);
         })
         .map_err(|e| format!("Invalid hotkey: {}", e))?;
+    }
+
+    // Apply autostart if changed
+    if old_autostart != new_config.launch_at_startup {
+        autostart::set_autostart(new_config.launch_at_startup)?;
     }
 
     Ok(())

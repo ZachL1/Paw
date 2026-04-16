@@ -11,6 +11,7 @@ interface Config {
   show_source_app: boolean;
   show_copy_count: boolean;
   ignored_apps: string[];
+  launch_at_startup: boolean;
 }
 
 interface SettingsViewProps {
@@ -229,6 +230,20 @@ function SettingsView({ onClose }: SettingsViewProps) {
             />
             <span className="text-white/70 text-xs">
               Paste on select (simulate {isMac ? "⌘V" : "Ctrl+V"})
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 mb-2">
+            <input
+              type="checkbox"
+              checked={config.launch_at_startup}
+              onChange={(e) =>
+                setConfig({ ...config, launch_at_startup: e.target.checked })
+              }
+              className="rounded accent-blue-500"
+            />
+            <span className="text-white/70 text-xs">
+              Launch at system startup
             </span>
           </label>
         </section>
