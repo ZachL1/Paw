@@ -78,7 +78,7 @@ systemctl --user enable --now paw.service
 |----------|--------|-------|
 | 🐧 Linux (X11) | ✅ Supported | Primary development platform |
 | 🐧 Linux (Wayland) | 🟡 Partial | Paste via wtype/ydotool |
-| 🍎 macOS | 🔲 Planned | |
+| 🍎 macOS | ✅ Supported | Paste via `osascript`, window focus via `osascript` |
 | 🪟 Windows | 🔲 Planned | |
 
 ## Features
@@ -216,7 +216,8 @@ Paw is inspired by [Maccy](https://github.com/p0deje/Maccy), an excellent clipbo
 
 ### 🖥️ Cross-Platform Desktop
 
-- [ ] **macOS support** — native `.dmg` packaging, `Cmd+V` paste simulation, menu bar tray
+- [x] **macOS support** — `Cmd+V` paste simulation via `osascript`, window focus, menu bar tray
+- [ ] **macOS `.dmg` packaging** — native installer bundle
 - [ ] **Windows support** — `.msi`/`.exe` installer, `SendInput` paste, system tray
 - [ ] **Wayland full support** — window focus and paste under Wayland compositors
 
