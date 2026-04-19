@@ -36,6 +36,7 @@ export interface AppConfig {
   show_source_app: boolean;
   show_copy_count: boolean;
   ignored_apps: string[];
+  launch_at_startup: boolean;
   preview_delay_ms: number;
 }
 

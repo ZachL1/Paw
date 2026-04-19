@@ -31,6 +31,7 @@ fn autostart_path() -> Result<PathBuf, String> {
     Ok(home.join(".config").join("autostart").join("paw.desktop"))
 }
 
+#[cfg(target_os = "linux")]
 fn escape_desktop_exec(path: &str) -> String {
     path.replace('\\', "\\\\").replace(' ', "\\ ")
 }
@@ -112,22 +113,4 @@ fn set_autostart_macos(enabled: bool, exe_path: &str) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// Read whether autostart is currently enabled (based on whether the file exists).
-pub fn is_autostart_enabled() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        autostart_path().map(|p| p.exists()).unwrap_or(false)
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        plist_path().map(|p| p.exists()).unwrap_or(false)
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        false
-    }
 }
