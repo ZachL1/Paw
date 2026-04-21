@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
+    PhysicalPosition, Position,
     SystemTray, SystemTrayEvent, SystemTrayMenu,
 };
 
@@ -29,6 +30,113 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+/// Get current cursor position in physical pixels.
+#[cfg(target_os = "linux")]
+fn get_cursor_position() -> Option<(i32, i32)> {
+    let output = std::process::Command::new("xdotool")
+        .args(["getmouselocation", "--shell"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut x = None;
+    let mut y = None;
+    for line in text.lines() {
+        if let Some(val) = line.strip_prefix("X=") {
+            x = val.parse().ok();
+        } else if let Some(val) = line.strip_prefix("Y=") {
+            y = val.parse().ok();
+        }
+    }
+    Some((x?, y?))
+}
+
+#[cfg(target_os = "macos")]
+fn get_cursor_position() -> Option<(i32, i32)> {
+    // On macOS, use CoreGraphics via osascript as a lightweight fallback
+    let output = std::process::Command::new("osascript")
+        .args([
+            "-e",
+            "use framework \"Foundation\"",
+            "-e",
+            "use framework \"AppKit\"",
+            "-e",
+            "set mouseLoc to current application's NSEvent's mouseLocation()",
+            "-e",
+            "set screenH to (current application's NSScreen's mainScreen()'s frame()'s |size|'s height) as integer",
+            "-e",
+            "set mx to (mouseLoc's x) as integer",
+            "-e",
+            "set my to (screenH - (mouseLoc's y as integer))",
+            "-e",
+            "return (mx as text) & \",\" & (my as text)",
+        ])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parts: Vec<&str> = text.split(',').collect();
+    if parts.len() == 2 {
+        let x: i32 = parts[0].trim().parse().ok()?;
+        let y: i32 = parts[1].trim().parse().ok()?;
+        Some((x, y))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn get_cursor_position() -> Option<(i32, i32)> {
+    None
+}
+
+/// Position the window on the monitor containing the cursor:
+/// - horizontally: centered on cursor X, clamped to monitor edges
+/// - vertically: centered on the monitor
+fn position_window_near_cursor(window: &tauri::Window) {
+    let (cursor_x, _cursor_y) = match get_cursor_position() {
+        Some(pos) => pos,
+        None => return, // fallback: keep existing position
+    };
+
+    // Find the monitor that contains the cursor
+    let monitors = match window.available_monitors() {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+
+    let target_monitor = monitors.iter().find(|m| {
+        let pos = m.position();
+        let size = m.size();
+        cursor_x >= pos.x
+            && cursor_x < pos.x + size.width as i32
+    });
+
+    let monitor = match target_monitor.or_else(|| monitors.first()) {
+        Some(m) => m,
+        None => return,
+    };
+
+    let mon_x = monitor.position().x;
+    let mon_y = monitor.position().y;
+    let mon_w = monitor.size().width as i32;
+    let mon_h = monitor.size().height as i32;
+
+    let win_size = match window.inner_size() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let win_w = win_size.width as i32;
+    let win_h = win_size.height as i32;
+
+    // Horizontal: center on cursor, clamp to monitor
+    let mut x = cursor_x - win_w / 2;
+    x = x.max(mon_x).min(mon_x + mon_w - win_w);
+
+    // Vertical: center on monitor
+    let y = mon_y + (mon_h - win_h) / 2;
+
+    let _ = window.set_position(Position::Physical(PhysicalPosition { x, y }));
 }
 
 #[tauri::command]
@@ -201,6 +309,10 @@ fn do_show(app: &AppHandle) {
         // which sees WINDOW_VISIBLE=true (via SeqCst) also sees the fresh timestamp.
         LAST_SHOWN_MS.store(now_ms(), Ordering::SeqCst);
         WINDOW_VISIBLE.store(true, Ordering::SeqCst);
+
+        // Position window near cursor before showing
+        position_window_near_cursor(&window);
+
         let _ = window.show();
         let _ = window.set_focus();
 
