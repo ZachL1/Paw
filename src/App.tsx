@@ -497,9 +497,6 @@ function App() {
         setQuery("");
         setSelectedIndex(0);
         await closePreview();
-        setTimeout(() => {
-          containerRef.current?.focus();
-        }, 50);
       })();
     }).then((fn) => {
       unlistenShown = fn;

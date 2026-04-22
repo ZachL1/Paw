@@ -13,9 +13,10 @@ function SearchBar({ query, onQueryChange }: SearchBarProps) {
     inputRef.current?.focus();
     // Re-focus search input whenever window is shown
     const unlisten = listen("window-shown", () => {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      // Use two attempts to ensure focus lands on the input even if
+      // other state updates (loadHistory, closePreview) cause re-renders.
+      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => inputRef.current?.focus(), 200);
     });
     return () => {
       unlisten.then((fn) => fn());
