@@ -538,6 +538,7 @@ function App() {
     new Fuse<HistoryItem>([], {
       keys: ["title"],
       threshold: 0.4,
+      ignoreLocation: true,
       includeScore: true,
     })
   );
@@ -546,9 +547,18 @@ function App() {
     fuse.current.setCollection(items);
   }, [items]);
 
-  const filteredItems = query
-    ? fuse.current.search(query).map((r) => r.item)
-    : items;
+  const filteredItems = (() => {
+    if (!query) return items;
+    // Fuse.js fuzzy results (now location-independent)
+    const fuseResults = fuse.current.search(query).map((r) => r.item);
+    // Also include exact substring matches that Fuse may have scored too low
+    const lowerQuery = query.toLowerCase();
+    const fuseIds = new Set(fuseResults.map((it) => it.id));
+    const substringMatches = items.filter(
+      (it) => !fuseIds.has(it.id) && it.title.toLowerCase().includes(lowerQuery)
+    );
+    return [...fuseResults, ...substringMatches];
+  })();
 
   filteredItemsRef.current = filteredItems;
 
