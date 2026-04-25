@@ -1,0 +1,71 @@
+name: release-macos
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve latest tag
+        id: tag
+        run: |
+          TAG=$(git tag --sort=-v:refname | head -n1)
+          if [ -z "$TAG" ]; then
+            echo "No release tag found; skipping."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        if: ${{ steps.tag.outputs.tag != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        if: ${{ steps.tag.outputs.tag != '' }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        if: ${{ steps.tag.outputs.tag != '' }}
+        run: npm ci
+
+      - name: Build macOS app bundle
+        if: ${{ steps.tag.outputs.tag != '' }}
+        run: npm run tauri build -- --bundles app
+
+      - name: Package .app as tar.gz
+        if: ${{ steps.tag.outputs.tag != '' }}
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          ASSET_NAME="Paw_${{ steps.tag.outputs.version }}_aarch64.app.tar.gz"
+          COPYFILE_DISABLE=1 tar -czf "$ASSET_NAME" Paw.app
+          shasum -a 256 "$ASSET_NAME" > "$ASSET_NAME.sha256"
+          echo "asset=$PWD/$ASSET_NAME" >> "$GITHUB_OUTPUT"
+          echo "checksum=$PWD/$ASSET_NAME.sha256" >> "$GITHUB_OUTPUT"
+        id: package
+
+      - name: Upload assets to release
+        if: ${{ steps.tag.outputs.tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          overwrite_files: true
+          files: |
+            ${{ steps.package.outputs.asset }}
+            ${{ steps.package.outputs.checksum }}
