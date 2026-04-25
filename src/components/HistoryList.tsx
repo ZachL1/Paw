@@ -11,22 +11,10 @@ interface HistoryListProps {
   onTogglePin: (id: number) => void;
   onHover?: (index: number) => void;
   searchQuery?: string;
-  showSourceApp?: boolean;
-  showCopyCount?: boolean;
 }
 
-const ITEM_HEIGHT = 28;
-const DIVIDER_HEIGHT = 9;
-
-function timeAgo(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr + "Z");
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
+const ITEM_HEIGHT = 24;
+const DIVIDER_HEIGHT = 7;
 
 /** Highlight matching substring in text (case-insensitive) */
 function HighlightedText({ text, query }: { text: string; query: string }) {
@@ -49,7 +37,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 }
 
 const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
-  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover, searchQuery, showSourceApp = true, showCopyCount = true }, ref) => {
+  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover, searchQuery }, ref) => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const pinnedCount = useMemo(
@@ -106,7 +94,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
         (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
         if (typeof ref === "function") ref(node);
         else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }} className="flex-1 overflow-y-auto py-1">
+      }} className="flex-1 overflow-y-auto py-0.5">
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,
@@ -141,7 +129,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                 )}
                 <div
                   className={`
-                    group px-3 py-1 mx-1 rounded cursor-pointer flex items-center gap-2
+                    group px-2 py-0.5 mx-1 rounded cursor-pointer flex items-center gap-1.5
                     ${isLinux ? "" : "transition-colors duration-100"}
                     ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
                   `}
@@ -164,7 +152,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                     <img
                       src={`data:image/png;base64,${item.thumbnail}`}
                       alt="clipboard image"
-                      className="w-8 h-6 object-cover rounded flex-shrink-0"
+                      className="w-7 h-5 object-cover rounded flex-shrink-0"
                     />
                   ) : item.content_type === "file" ? (
                     <span className="text-white/30 text-xs flex-shrink-0 w-4 text-center">
@@ -173,32 +161,13 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                   ) : null}
 
                   {/* Title with search highlighting */}
-                  <span className="text-white/90 text-sm truncate flex-1 leading-snug">
+                  <span className="text-white/90 text-[13px] truncate flex-1 leading-tight">
                     <HighlightedText text={item.title || "(empty)"} query={searchQuery ?? ""} />
                   </span>
 
-                  {/* Source app (if enabled and available) */}
-                  {showSourceApp && item.source_app && (
-                    <span className="text-white/15 text-[10px] flex-shrink-0 truncate max-w-[60px]">
-                      {item.source_app}
-                    </span>
-                  )}
-
-                  {/* Time ago */}
-                  <span className="text-white/15 text-xs flex-shrink-0">
-                    {timeAgo(item.last_copied_at)}
-                  </span>
-
-                  {/* Copy count badge (only when >= 3 and enabled) */}
-                  {showCopyCount && item.copy_count >= 3 && (
-                    <span className="text-white/20 text-[10px] bg-white/5 px-1 rounded flex-shrink-0">
-                      ×{item.copy_count}
-                    </span>
-                  )}
-
                   {/* Shortcut badge for first 9 unpinned items */}
                   {shortcutNum !== null && (
-                    <span className="text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded flex-shrink-0">
+                    <span className="text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded flex-shrink-0 leading-none py-[1px]">
                       {isMac ? "⌘" : "Ctrl+"}
                       {shortcutNum}
                     </span>

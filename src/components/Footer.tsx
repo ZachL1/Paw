@@ -21,7 +21,7 @@ function Footer({
   const quitShortcut = isMac ? "⌘Q" : "Ctrl+Q";
 
   return (
-    <div className="border-t border-white/10 px-3 py-2 text-[10px] text-white/25">
+    <div className="border-t border-white/10 px-2.5 py-1 text-[10px] text-white/25">
       <div className="flex items-center justify-between">
         <span>{itemCount} items</span>
         <span>
@@ -29,12 +29,12 @@ function Footer({
         </span>
       </div>
 
-      <div className="mt-2 border-t border-white/10 pt-1.5">
+      <div className="mt-0.5 border-t border-white/10 pt-0.5">
         <button
           type="button"
           onClick={onClearAll}
           disabled={itemCount === 0}
-          className="group flex w-full items-center justify-between rounded px-1 py-1.5 text-left text-sm text-white/80 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:text-white/20"
+          className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:text-white/20"
         >
           <span>Clear</span>
           <span className="text-white/30 text-xs">{clearShortcut}</span>
@@ -43,7 +43,7 @@ function Footer({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="group flex w-full items-center justify-between rounded px-1 py-1.5 text-left text-sm text-white/80 transition-colors hover:bg-white/5"
+          className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
           <span>Preferences…</span>
           <span className="text-white/30 text-xs">{settingsShortcut}</span>
@@ -52,7 +52,7 @@ function Footer({
         <button
           type="button"
           onClick={onOpenAbout}
-          className="group flex w-full items-center justify-between rounded px-1 py-1.5 text-left text-sm text-white/80 transition-colors hover:bg-white/5"
+          className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
           <span>About</span>
           <span className="text-white/0 text-xs">·</span>
@@ -61,7 +61,7 @@ function Footer({
         <button
           type="button"
           onClick={onQuit}
-          className="group flex w-full items-center justify-between rounded px-1 py-1.5 text-left text-sm text-white/80 transition-colors hover:bg-white/5"
+          className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
           <span>Quit</span>
           <span className="text-white/30 text-xs">{quitShortcut}</span>

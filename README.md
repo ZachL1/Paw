@@ -78,17 +78,20 @@ systemctl --user enable --now paw.service
 |----------|--------|-------|
 | 🐧 Linux (X11) | ✅ Supported | Primary development platform |
 | 🐧 Linux (Wayland) | 🟡 Partial | Paste via wtype/ydotool |
-| 🍎 macOS | ✅ Supported | Paste via `osascript`, window focus via `osascript` |
+| 🍎 macOS | ✅ Supported | Native paste via CGEvent, tray/menu integration |
 | 🪟 Windows | 🔲 Planned | |
 
 ## Features
 
-- 🔍 **Fuzzy search** — type to filter history instantly
+- 🔍 **Instant full-text search** — fast substring search across title + content
 - ⌨️ **Keyboard-first** — full keyboard navigation, no mouse needed
 - 📌 **Pin items** — keep frequently used snippets at the top
 - 👁️ **Slideout preview** — same-window preview panel for full content
 - 🖼️ **Image support** — copies and pastes images, shows thumbnails
+- 📚 **Virtualized history list** — smooth scrolling with large histories
+- 🔄 **Incremental updates** — clipboard changes merge without full reload
 - 🎯 **Auto-paste** — select an item and it pastes to the active app
+- 🧩 **Tray + footer actions** — Preferences, About, Quit, and quick clear
 - ⚙️ **Configurable** — hotkey, history size, poll interval and more
 - 🪶 **Lightweight** — ~4 MB deb package, ~11 MB binary, minimal RAM
 - 🌙 **Dark UI** — clean, distraction-free floating panel
@@ -128,21 +131,21 @@ Open settings with **`Ctrl+,`** or via the tray menu. Config is stored in `~/.co
 
 ```bash
 sudo apt install xdotool
-sudo dpkg -i paw_0.1.0_amd64.deb
+sudo dpkg -i paw_0.1.2_amd64.deb
 sudo apt-get install -f
 ```
 
 ### Any Linux (AppImage)
 
 ```bash
-chmod +x paw_0.1.0_amd64.AppImage
-./paw_0.1.0_amd64.AppImage
+chmod +x paw_0.1.2_amd64.AppImage
+./paw_0.1.2_amd64.AppImage
 ```
 
 ### Fedora / RHEL (.rpm)
 
 ```bash
-sudo rpm -i paw-0.1.0-1.x86_64.rpm
+sudo rpm -i paw-0.1.2-1.x86_64.rpm
 sudo dnf install xdotool
 ```
 
@@ -205,7 +208,7 @@ Paw
 | Frontend | React + TypeScript |
 | Styling | Tailwind CSS v4 |
 | Database | SQLite (rusqlite) |
-| Search | Fuse.js |
+| Search | SQLite (`LIKE` substring, backend) |
 | Clipboard | arboard crate |
 
 ## Acknowledgements
@@ -216,7 +219,7 @@ Paw is inspired by [Maccy](https://github.com/p0deje/Maccy), an excellent clipbo
 
 ### 🖥️ Cross-Platform Desktop
 
-- [x] **macOS support** — `Cmd+V` paste simulation via `osascript`, window focus, menu bar tray
+- [x] **macOS support** — native CGEvent paste, menu bar tray, and keyboard-first popup flow
 - [ ] **macOS `.dmg` packaging** — native installer bundle
 - [ ] **Windows support** — `.msi`/`.exe` installer, `SendInput` paste, system tray
 - [ ] **Wayland full support** — window focus and paste under Wayland compositors

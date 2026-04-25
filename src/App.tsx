@@ -88,7 +88,6 @@ function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [contentWidth, setContentWidth] = useState(400);
   const [previewWidth, setPreviewWidth] = useState(DEFAULT_PREVIEW_WIDTH);
-  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -565,7 +564,6 @@ function App() {
 
     void listen("config-changed", () => {
       invoke<AppConfig>("get_config").then((cfg) => {
-        setAppConfig(cfg);
         appConfigRef.current = cfg;
       }).catch(console.error);
     }).then(() => {});
@@ -600,7 +598,6 @@ function App() {
   // Load config on mount
   useEffect(() => {
     invoke<AppConfig>("get_config").then((cfg) => {
-      setAppConfig(cfg);
       appConfigRef.current = cfg;
     }).catch(console.error);
   }, []);
@@ -921,8 +918,6 @@ function App() {
         onTogglePin={handleTogglePin}
         onHover={handleHover}
         searchQuery={query}
-        showSourceApp={appConfig?.show_source_app ?? true}
-        showCopyCount={appConfig?.show_copy_count ?? true}
       />
       <Footer
         itemCount={filteredItems.length}
@@ -968,19 +963,11 @@ function App() {
       className="relative glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none overflow-hidden"
       onKeyDown={handleKeyDown}
     >
-      <div
-        data-tauri-drag-region
-        className="h-4 flex-shrink-0 flex items-center justify-center cursor-move"
-      >
-        <div className="w-6 h-0.5 rounded-full bg-white/20" />
-      </div>
-
       {showSettings ? (
         <SettingsView onClose={() => {
           setShowSettings(false);
           // Reload config after settings close
           invoke<AppConfig>("get_config").then((cfg) => {
-            setAppConfig(cfg);
             appConfigRef.current = cfg;
           }).catch(console.error);
         }} />
