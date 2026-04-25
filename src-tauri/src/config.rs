@@ -10,9 +10,10 @@ pub struct AppConfig {
     pub paste_on_select: bool,
     pub show_source_app: bool,
     pub show_copy_count: bool,
-    pub ignored_apps: Vec<String>,
     #[serde(default)]
     pub launch_at_startup: bool,
+    #[serde(default)]
+    pub hide_tray_menu_actions: bool,
     #[serde(default = "default_preview_delay")]
     pub preview_delay_ms: u64,
 }
@@ -31,8 +32,8 @@ impl Default for AppConfig {
             paste_on_select: true,
             show_source_app: true,
             show_copy_count: true,
-            ignored_apps: vec![],
             launch_at_startup: false,
+            hide_tray_menu_actions: false,
             preview_delay_ms: 1500,
         }
     }

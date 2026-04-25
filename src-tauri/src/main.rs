@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     AppHandle, CustomMenuItem, GlobalShortcutManager, Manager,
     PhysicalPosition, Position,
-    SystemTray, SystemTrayEvent, SystemTrayMenu,
+    SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
 };
 
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
@@ -137,6 +137,26 @@ fn position_window_near_cursor(window: &tauri::Window) {
     let y = mon_y + (mon_h - win_h) / 2;
 
     let _ = window.set_position(Position::Physical(PhysicalPosition { x, y }));
+}
+
+fn build_tray_menu(hide_tray_menu_actions: bool) -> SystemTrayMenu {
+    let mut menu = SystemTrayMenu::new()
+        .add_item(CustomMenuItem::new("toggle", "Show/Hide"));
+
+    if !hide_tray_menu_actions {
+        menu = menu
+            .add_native_item(SystemTrayMenuItem::Separator)
+            .add_item(CustomMenuItem::new("settings", "Preferences..."))
+            .add_item(CustomMenuItem::new("about", "About"))
+            .add_item(CustomMenuItem::new("quit", "Quit"));
+    }
+
+    menu
+}
+
+#[tauri::command]
+fn quit_app() {
+    std::process::exit(0);
 }
 
 #[tauri::command]
@@ -266,43 +286,93 @@ fn save_config(
     app: AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
 ) -> Result<(), String> {
-    let (old_hotkey, old_autostart) = {
-        let mut config = state.lock().unwrap();
-        let old_hotkey = config.hotkey.clone();
-        let old_autostart = config.launch_at_startup;
-        *config = new_config.clone();
-        config.save().map_err(|e| e.to_string())?;
-        (old_hotkey, old_autostart)
+    let (old_hotkey, old_autostart, old_hide_tray_menu_actions) = {
+        let config = state.lock().unwrap();
+        (
+            config.hotkey.clone(),
+            config.launch_at_startup,
+            config.hide_tray_menu_actions,
+        )
     };
+    let hotkey_changed = old_hotkey != new_config.hotkey;
+    let app_handle = app.clone();
 
     // Re-register hotkey if changed — register new FIRST, then unregister old
-    if old_hotkey != new_config.hotkey {
+    if hotkey_changed {
         let mut gsm = app.global_shortcut_manager();
-        let app_handle = app.clone();
         gsm.register(&new_config.hotkey, move || {
             toggle_window(&app_handle);
         })
         .map_err(|e| format!("Invalid hotkey: {}", e))?;
-        // New hotkey registered successfully — safe to unregister old
+    }
+
+    // Persist config only after hotkey is confirmed valid.
+    let saved_config = new_config.clone();
+    if let Err(e) = saved_config.save() {
+        if hotkey_changed {
+            let mut gsm = app.global_shortcut_manager();
+            let _ = gsm.unregister(&new_config.hotkey);
+        }
+        return Err(e.to_string());
+    }
+    {
+        let mut config = state.lock().unwrap();
+        *config = saved_config;
+    }
+
+    // New hotkey registered successfully — safe to unregister old
+    if hotkey_changed {
+        let mut gsm = app.global_shortcut_manager();
         let _ = gsm.unregister(&old_hotkey);
     }
 
-    // Persist config only after hotkey is confirmed valid
-    {
-        let mut config = state.lock().unwrap();
-        *config = new_config.clone();
-        config.save().map_err(|e| e.to_string())?;
+    // Notify clipboard monitor of config changes
+    if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
+        monitor.update_config(new_config.poll_interval_ms);
     }
 
-    // Notify clipboard monitor of config changes (poll interval, ignored apps)
-    if let Some(monitor) = app.try_state::<ClipboardMonitor>() {
-        monitor.update_config(new_config.poll_interval_ms, new_config.ignored_apps.clone());
+    // Update tray menu before autostart so a startup failure doesn't leave the tray stale.
+    if old_hide_tray_menu_actions != new_config.hide_tray_menu_actions {
+        app.tray_handle()
+            .set_menu(build_tray_menu(new_config.hide_tray_menu_actions))
+            .map_err(|e| e.to_string())?;
     }
 
     // Apply autostart if changed
     if old_autostart != new_config.launch_at_startup {
         autostart::set_autostart(new_config.launch_at_startup)?;
     }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn set_hide_tray_menu_actions(
+    hide_tray_menu_actions: bool,
+    app: AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
+) -> Result<(), String> {
+    let old_hide_tray_menu_actions = {
+        let config = state.lock().unwrap();
+        config.hide_tray_menu_actions
+    };
+
+    if old_hide_tray_menu_actions == hide_tray_menu_actions {
+        return Ok(());
+    }
+
+    {
+        let mut config = state.lock().unwrap();
+        config.hide_tray_menu_actions = hide_tray_menu_actions;
+        if let Err(e) = config.save() {
+            config.hide_tray_menu_actions = old_hide_tray_menu_actions;
+            return Err(e.to_string());
+        }
+    }
+
+    app.tray_handle()
+        .set_menu(build_tray_menu(hide_tray_menu_actions))
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -432,94 +502,6 @@ fn do_show(app: &AppHandle) {
     }
 }
 
-/// Get cursor position in logical coordinates
-#[cfg(target_os = "macos")]
-fn get_cursor_position() -> Option<(f64, f64)> {
-    use objc::{msg_send, sel, sel_impl, class};
-    use objc::runtime::Object;
-    unsafe {
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        struct NSPoint { x: f64, y: f64 }
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        struct NSSize { width: f64, height: f64 }
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        struct NSRect { origin: NSPoint, size: NSSize }
-
-        let point: NSPoint = msg_send![class!(NSEvent), mouseLocation];
-
-        // Find the screen containing the cursor for correct Y-flip
-        let screens: *mut Object = msg_send![class!(NSScreen), screens];
-        if screens.is_null() {
-            return None;
-        }
-        let count: usize = msg_send![screens, count];
-        let mut screen_height = 0.0_f64;
-        for i in 0..count {
-            let screen: *mut Object = msg_send![screens, objectAtIndex: i];
-            let frame: NSRect = msg_send![screen, frame];
-            if point.x >= frame.origin.x
-                && point.x < frame.origin.x + frame.size.width
-                && point.y >= frame.origin.y
-                && point.y < frame.origin.y + frame.size.height
-            {
-                // Found the screen containing the cursor
-                // Use the primary screen (index 0) height for global coordinate flip
-                let primary: *mut Object = msg_send![screens, objectAtIndex: 0usize];
-                let primary_frame: NSRect = msg_send![primary, frame];
-                screen_height = primary_frame.size.height;
-                break;
-            }
-        }
-        if screen_height == 0.0 {
-            // Fallback to main screen
-            let screen: *mut Object = msg_send![class!(NSScreen), mainScreen];
-            if !screen.is_null() {
-                let frame: NSRect = msg_send![screen, frame];
-                screen_height = frame.size.height;
-            }
-        }
-        if screen_height > 0.0 {
-            let y = screen_height - point.y;
-            Some((point.x, y))
-        } else {
-            Some((point.x, point.y))
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn get_cursor_position() -> Option<(f64, f64)> {
-    if let Ok(output) = std::process::Command::new("xdotool")
-        .args(["getmouselocation", "--shell"])
-        .output()
-    {
-        if output.status.success() {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let mut x = None;
-            let mut y = None;
-            for line in text.lines() {
-                if let Some(val) = line.strip_prefix("X=") {
-                    x = val.parse().ok();
-                } else if let Some(val) = line.strip_prefix("Y=") {
-                    y = val.parse().ok();
-                }
-            }
-            if let (Some(x), Some(y)) = (x, y) {
-                return Some((x, y));
-            }
-        }
-    }
-    None
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-fn get_cursor_position() -> Option<(f64, f64)> {
-    None
-}
-
 fn toggle_window(app: &AppHandle) {
     if WINDOW_VISIBLE.load(Ordering::SeqCst) {
         do_hide(app);
@@ -533,10 +515,7 @@ fn main() {
 
     let config = Arc::new(Mutex::new(AppConfig::load()));
 
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(CustomMenuItem::new("toggle", "Show/Hide"))
-        .add_item(CustomMenuItem::new("settings", "Settings"))
-        .add_item(CustomMenuItem::new("quit", "Quit"));
+    let tray_menu = build_tray_menu(config.lock().unwrap().hide_tray_menu_actions);
     let tray = SystemTray::new().with_menu(tray_menu);
 
     let hotkey = config.lock().unwrap().hotkey.clone();
@@ -557,7 +536,13 @@ fn main() {
                         let _ = window.emit("show-settings", ());
                     }
                 }
-                "quit" => std::process::exit(0),
+                "about" => {
+                    do_show(app);
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.emit("show-about", ());
+                    }
+                }
+                "quit" => quit_app(),
                 _ => {}
             },
             _ => {}
@@ -585,12 +570,16 @@ fn main() {
             let app_handle = app.handle().clone();
             let cfg = config.lock().unwrap();
             let poll_ms = cfg.poll_interval_ms;
-            let ignored = cfg.ignored_apps.clone();
+            let hide_tray_menu_actions = cfg.hide_tray_menu_actions;
             drop(cfg);
             monitor.start(db, move |item| {
                 let _ = app_handle.emit_all("clipboard-changed", item);
-            }, poll_ms, ignored);
+            }, poll_ms);
             app.manage(monitor);
+
+            app.tray_handle()
+                .set_menu(build_tray_menu(hide_tray_menu_actions))
+                .expect("Failed to update tray menu");
 
             let app_handle = app.handle().clone();
             app.global_shortcut_manager()
@@ -612,7 +601,9 @@ fn main() {
             get_item_content,
             get_config,
             save_config,
+            set_hide_tray_menu_actions,
             hide_window,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Paw");

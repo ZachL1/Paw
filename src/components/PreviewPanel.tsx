@@ -90,19 +90,19 @@ function PreviewPanel({
 
       <div className="flex-shrink-0 px-3 py-2 border-t border-white/8 bg-white/[0.02] space-y-0.5">
         {item.source_app && (
-          <div className="text-white/40 text-[11px]">来源应用: {item.source_app}</div>
+          <div className="text-white/40 text-[11px]">Source app: {item.source_app}</div>
         )}
         <div className="text-white/40 text-[11px]">
-          首次复制时间: {formatDate(item.first_copied_at)}
+          First copied: {formatDate(item.first_copied_at)}
         </div>
         <div className="text-white/40 text-[11px]">
-          上次复制时间: {formatDate(item.last_copied_at)}
+          Last copied: {formatDate(item.last_copied_at)}
         </div>
         <div className="text-white/40 text-[11px]">
-          复制次数: {item.copy_count}
+          Copies: {item.copy_count}
           {isImage && dimensions && ` · ${dimensions}`}
-          {!isImage && ` · ${lineCount} 行 · ${charCount} 字符`}
-          {item.is_pinned && " · 📌 已固定"}
+          {!isImage && ` · ${lineCount} lines · ${charCount} chars`}
+          {item.is_pinned && " · 📌 Pinned"}
         </div>
       </div>
     </div>

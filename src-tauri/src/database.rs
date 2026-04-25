@@ -167,9 +167,15 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, content_type, content, thumbnail, title, source_app,
                     first_copied_at, last_copied_at, copy_count, is_pinned
-             FROM history_items
-             ORDER BY is_pinned DESC, last_copied_at DESC
-             LIMIT ?1",
+              FROM history_items
+             WHERE is_pinned = 1
+                OR id IN (
+                    SELECT id FROM history_items
+                    WHERE is_pinned = 0
+                    ORDER BY last_copied_at DESC
+                    LIMIT ?1
+                )
+             ORDER BY is_pinned DESC, last_copied_at DESC",
         )?;
 
         let items = stmt
@@ -204,14 +210,24 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, content_type, content, thumbnail, title, source_app,
                     first_copied_at, last_copied_at, copy_count, is_pinned
-             FROM history_items
-             WHERE title LIKE ?1 ESCAPE '\\' OR content LIKE ?1 ESCAPE '\\'
+              FROM history_items
+             WHERE (
+                    is_pinned = 1
+                    AND (title LIKE ?1 ESCAPE '\\' OR content LIKE ?1 ESCAPE '\\')
+                  )
+                OR id IN (
+                    SELECT id FROM history_items
+                    WHERE is_pinned = 0
+                      AND (title LIKE ?2 ESCAPE '\\' OR content LIKE ?2 ESCAPE '\\')
+                    ORDER BY last_copied_at DESC
+                    LIMIT ?3
+                )
              ORDER BY is_pinned DESC, last_copied_at DESC
-             LIMIT ?2",
+             ",
         )?;
 
         let items = stmt
-            .query_map(params![pattern, max_items], |row| {
+            .query_map(params![pattern, pattern, max_items], |row| {
                 Ok(HistoryItem {
                     id: row.get(0)?,
                     content_type: row.get(1)?,

@@ -2,7 +2,7 @@ use arboard::Clipboard as ArboardClipboard;
 use sha2::{Sha256, Digest};
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -23,8 +23,6 @@ pub struct ClipboardMonitor {
     last_change_count: Arc<AtomicI64>,
     /// Dynamic poll interval in ms (updated from config)
     poll_interval_ms: Arc<AtomicU64>,
-    /// Dynamic ignored apps list (updated from config)
-    ignored_apps: Arc<RwLock<Vec<String>>>,
 }
 
 impl ClipboardMonitor {
@@ -35,7 +33,6 @@ impl ClipboardMonitor {
             suppress: Arc::new(AtomicBool::new(false)),
             last_change_count: Arc::new(AtomicI64::new(-1)),
             poll_interval_ms: Arc::new(AtomicU64::new(500)),
-            ignored_apps: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -45,12 +42,11 @@ impl ClipboardMonitor {
     }
 
     /// Update runtime config without restarting the monitor thread
-    pub fn update_config(&self, poll_ms: u64, apps: Vec<String>) {
+    pub fn update_config(&self, poll_ms: u64) {
         self.poll_interval_ms.store(poll_ms.max(100).min(5000), Ordering::SeqCst);
-        *self.ignored_apps.write().unwrap() = apps;
     }
 
-    pub fn start<F>(&self, db: Arc<Database>, on_change: F, initial_poll_ms: u64, initial_ignored: Vec<String>)
+    pub fn start<F>(&self, db: Arc<Database>, on_change: F, initial_poll_ms: u64)
     where
         F: Fn(Option<crate::models::HistoryItem>) + Send + Sync + 'static,
     {
@@ -59,11 +55,9 @@ impl ClipboardMonitor {
         let suppress = self.suppress.clone();
         let last_change_count = self.last_change_count.clone();
         let poll_interval_ms = self.poll_interval_ms.clone();
-        let ignored_apps = self.ignored_apps.clone();
 
         // Apply initial config
         poll_interval_ms.store(initial_poll_ms.max(100).min(5000), Ordering::SeqCst);
-        *ignored_apps.write().unwrap() = initial_ignored;
 
         // Initialize with current clipboard content
         if let Ok(mut clipboard) = ArboardClipboard::new() {
@@ -123,10 +117,6 @@ impl ClipboardMonitor {
                     continue;
                 }
 
-                // Check if frontmost app is ignored (only when there's potential content)
-                // We defer source_app capture to after change detection to avoid
-                // spawning subprocesses every poll cycle
-
                 // Try text first
                 if let Ok(text) = clipboard.get_text() {
                     if !text.is_empty() {
@@ -139,15 +129,7 @@ impl ClipboardMonitor {
                             *last = LastClipboard::Text(text.clone());
                             drop(last);
 
-                            // Capture source app only when we have a new item
                             let source_app = get_frontmost_app();
-                            if let Some(ref app_name) = source_app {
-                                let apps = ignored_apps.read().unwrap();
-                                let app_lower = app_name.to_lowercase();
-                                if apps.iter().any(|a| app_lower.contains(&a.to_lowercase())) {
-                                    continue;
-                                }
-                            }
 
                             match db.add_item(&text, "text", source_app.as_deref()) {
                                 Ok(item_id) => {
@@ -176,15 +158,7 @@ impl ClipboardMonitor {
                             *last = LastClipboard::ImageHash(hash.clone());
                             drop(last);
 
-                            // Capture source app only when we have a new item
                             let source_app = get_frontmost_app();
-                            if let Some(ref app_name) = source_app {
-                                let apps = ignored_apps.read().unwrap();
-                                let app_lower = app_name.to_lowercase();
-                                if apps.iter().any(|a| app_lower.contains(&a.to_lowercase())) {
-                                    continue;
-                                }
-                            }
 
                             match encode_rgba_to_png(
                                 &img_data.bytes,

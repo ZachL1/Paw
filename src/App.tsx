@@ -12,6 +12,7 @@ import SearchBar from "./components/SearchBar";
 import HistoryList from "./components/HistoryList";
 import SettingsView from "./components/SettingsView";
 import Footer from "./components/Footer";
+import AboutDialog from "./components/AboutDialog";
 import PreviewPanel from "./components/PreviewPanel";
 
 export interface HistoryItem {
@@ -35,8 +36,8 @@ export interface AppConfig {
   paste_on_select: boolean;
   show_source_app: boolean;
   show_copy_count: boolean;
-  ignored_apps: string[];
   launch_at_startup: boolean;
+  hide_tray_menu_actions: boolean;
   preview_delay_ms: number;
 }
 
@@ -78,6 +79,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPlacement, setPreviewPlacement] =
     useState<PreviewPlacement>("right");
@@ -103,7 +105,7 @@ function App() {
   const previewItemIdRef = useRef<number | null>(null);
   const filteredItemsRef = useRef<HistoryItem[]>([]);
   const contentCacheRef = useRef<Map<number, string>>(new Map());
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
   const appConfigRef = useRef<AppConfig | null>(null);
 
   const loadHistory = useCallback(async () => {
@@ -118,6 +120,20 @@ function App() {
     } catch (e) {
       console.error("Failed to load history:", e);
     }
+  }, []);
+
+  const openSettings = useCallback(() => {
+    setShowAbout(false);
+    setShowSettings(true);
+  }, []);
+
+  const openAbout = useCallback(() => {
+    setShowSettings(false);
+    setShowAbout(true);
+  }, []);
+
+  const quitApp = useCallback(() => {
+    void invoke("quit_app");
   }, []);
 
   const syncContentWidthFromWindow = useCallback(async () => {
@@ -504,15 +520,10 @@ function App() {
           const filtered = prev.filter((i) => i.id !== newItem.id);
           const pinned = filtered.filter((i) => i.is_pinned);
           const unpinned = filtered.filter((i) => !i.is_pinned);
-          // New item goes at start of its section (most recent first)
-          const merged = newItem.is_pinned
-            ? [newItem, ...pinned, ...unpinned]
-            : [...pinned, newItem, ...unpinned];
-          // Enforce max_history: trim oldest unpinned items from the end
-          if (merged.length > maxHistory) {
-            return merged.slice(0, maxHistory);
-          }
-          return merged;
+          // Keep all pinned items; limit only unpinned items to max_history.
+          const nextPinned = newItem.is_pinned ? [newItem, ...pinned] : pinned;
+          const nextUnpinned = newItem.is_pinned ? unpinned : [newItem, ...unpinned];
+          return [...nextPinned, ...nextUnpinned.slice(0, maxHistory)];
         });
       } else {
         // Fallback: full reload
@@ -528,6 +539,7 @@ function App() {
       // (emitted right after window-shown by the tray Settings handler) can
       // re-open them reliably, regardless of async loadHistory timing.
       setShowSettings(false);
+      setShowAbout(false);
       void (async () => {
         await loadHistory();
         setQuery("");
@@ -539,9 +551,16 @@ function App() {
     });
 
     void listen("show-settings", () => {
-      setShowSettings(true);
+      openSettings();
     }).then((fn) => {
       unlistenSettings = fn;
+    });
+
+    let unlistenAbout: (() => void) | null = null;
+    void listen("show-about", () => {
+      openAbout();
+    }).then((fn) => {
+      unlistenAbout = fn;
     });
 
     void listen("config-changed", () => {
@@ -572,10 +591,11 @@ function App() {
       unlistenClipboard?.();
       unlistenShown?.();
       unlistenSettings?.();
+      unlistenAbout?.();
       unlistenResize?.();
       unlistenFocus?.();
     };
-  }, [closePreview, hideWindow, loadHistory, syncContentWidthFromWindow]);
+  }, [closePreview, hideWindow, loadHistory, openAbout, openSettings, syncContentWidthFromWindow]);
 
   // Load config on mount
   useEffect(() => {
@@ -590,17 +610,19 @@ function App() {
 
   useEffect(() => {
     if (!query) {
+      searchRequestIdRef.current += 1;
       setFilteredItems(items);
       return;
     }
 
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-    }
-
-    searchDebounceRef.current = setTimeout(async () => {
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+    void (async () => {
       try {
         const results = await invoke<HistoryItem[]>("search_history", { query });
+        if (searchRequestIdRef.current !== requestId) {
+          return;
+        }
         setFilteredItems(
           results.map((item) => ({
             ...item,
@@ -608,16 +630,13 @@ function App() {
           }))
         );
       } catch (e) {
+        if (searchRequestIdRef.current !== requestId) {
+          return;
+        }
         console.error("Search failed:", e);
         setFilteredItems(items);
       }
-    }, 150);
-
-    return () => {
-      if (searchDebounceRef.current) {
-        clearTimeout(searchDebounceRef.current);
-      }
-    };
+    })();
   }, [query, items]);
 
   filteredItemsRef.current = filteredItems;
@@ -763,6 +782,16 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (showAbout && e.key === "Escape") {
+        e.preventDefault();
+        setShowAbout(false);
+        return;
+      }
+      if (showAbout) {
+        e.preventDefault();
+        return;
+      }
+
       const curItems = filteredItemsRef.current;
       const maxIndex = curItems.length - 1;
 
@@ -827,7 +856,11 @@ function App() {
           break;
         case e.key === "," && (e.ctrlKey || (isMac && e.metaKey)):
           e.preventDefault();
-          setShowSettings((s) => !s);
+          openSettings();
+          break;
+        case e.key === "q" && (e.ctrlKey || (isMac && e.metaKey)):
+          e.preventDefault();
+          void quitApp();
           break;
         case e.key >= "1" && e.key <= "9" && (isMac ? e.metaKey : e.ctrlKey): {
           e.preventDefault();
@@ -853,8 +886,11 @@ function App() {
       handleSelect,
       handleTogglePin,
       hideWindow,
+      openSettings,
       selectedIndex,
       showPreviewFor,
+      showAbout,
+      quitApp,
       triggerPreview,
     ]
   );
@@ -865,10 +901,10 @@ function App() {
   }, [closePreview, query]);
 
   useEffect(() => {
-    if (showSettings) {
+    if (showSettings || showAbout) {
       void closePreview();
     }
-  }, [closePreview, showSettings]);
+  }, [closePreview, showAbout, showSettings]);
 
   const mainContent = (
     <div
@@ -888,7 +924,13 @@ function App() {
         showSourceApp={appConfig?.show_source_app ?? true}
         showCopyCount={appConfig?.show_copy_count ?? true}
       />
-      <Footer itemCount={filteredItems.length} onClearAll={handleClearAll} />
+      <Footer
+        itemCount={filteredItems.length}
+        onClearAll={handleClearAll}
+        onOpenSettings={openSettings}
+        onOpenAbout={openAbout}
+        onQuit={quitApp}
+      />
     </div>
   );
 
@@ -923,7 +965,7 @@ function App() {
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none overflow-hidden"
+      className="relative glass-bg h-full flex flex-col rounded-lg border border-white/10 outline-none overflow-hidden"
       onKeyDown={handleKeyDown}
     >
       <div
@@ -950,6 +992,10 @@ function App() {
           {previewPlacement === "right" && previewDivider}
           {previewPlacement === "right" && previewPanel}
         </div>
+      )}
+
+      {showAbout && (
+        <AboutDialog onClose={() => setShowAbout(false)} />
       )}
 
       {/* Clear All confirmation overlay */}

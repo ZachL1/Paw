@@ -154,22 +154,62 @@ function SettingsView({ onClose }: SettingsViewProps) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savedTimeoutRef = useRef<number | null>(null);
+  const trayMenuVisibilitySaveChain = useRef(Promise.resolve());
 
   useEffect(() => {
     invoke<AppConfig>("get_config").then(setConfig).catch(console.error);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (!config) return;
+  useEffect(() => {
+    return () => {
+      if (savedTimeoutRef.current !== null) {
+        window.clearTimeout(savedTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const markSaved = useCallback(() => {
+    if (savedTimeoutRef.current !== null) {
+      window.clearTimeout(savedTimeoutRef.current);
+    }
+    setSaved(true);
+    setError(null);
+    savedTimeoutRef.current = window.setTimeout(() => {
+      setSaved(false);
+      savedTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const persistConfig = useCallback(async (nextConfig: AppConfig) => {
     try {
-      await invoke("save_config", { newConfig: config });
-      setSaved(true);
-      setError(null);
-      setTimeout(() => setSaved(false), 2000);
+      await invoke("save_config", { newConfig: nextConfig });
+      markSaved();
     } catch (e) {
       setError(String(e));
     }
-  }, [config]);
+  }, [markSaved]);
+
+  const persistTrayMenuVisibility = useCallback((hidden: boolean) => {
+    trayMenuVisibilitySaveChain.current = trayMenuVisibilitySaveChain.current
+      .catch(() => undefined)
+      .then(() =>
+        invoke("set_hide_tray_menu_actions", {
+          hideTrayMenuActions: hidden,
+        })
+      )
+      .then(() => {
+        markSaved();
+      })
+      .catch((e) => {
+        setError(String(e));
+      });
+  }, [markSaved]);
+
+  const handleSave = useCallback(async () => {
+    if (!config) return;
+    await persistConfig(config);
+  }, [config, persistConfig]);
 
   if (!config) {
     return (
@@ -233,6 +273,26 @@ function SettingsView({ onClose }: SettingsViewProps) {
             />
             <span className="text-white/70 text-xs">
               Launch at system startup
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 mb-2">
+            <input
+              type="checkbox"
+              checked={config.hide_tray_menu_actions}
+              onChange={(e) => {
+                const hidden = e.target.checked;
+                const nextConfig = {
+                  ...config,
+                  hide_tray_menu_actions: hidden,
+                };
+                setConfig(nextConfig);
+                persistTrayMenuVisibility(hidden);
+              }}
+              className="rounded accent-blue-500"
+            />
+            <span className="text-white/70 text-xs">
+              Hide tray menu actions
             </span>
           </label>
         </section>
@@ -359,26 +419,6 @@ function SettingsView({ onClose }: SettingsViewProps) {
             />
           </label>
 
-          <label className="block mb-3">
-            <span className="text-white/70 text-xs">
-              Ignored apps (comma-separated)
-            </span>
-            <input
-              type="text"
-              value={config.ignored_apps.join(", ")}
-              onChange={(e) =>
-                setConfig({
-                  ...config,
-                  ignored_apps: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0),
-                })
-              }
-              placeholder="e.g. 1Password, KeePassXC"
-              className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
-            />
-          </label>
         </section>
       </div>
 
