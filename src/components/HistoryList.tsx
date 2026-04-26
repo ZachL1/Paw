@@ -16,49 +16,16 @@ interface HistoryListProps {
 }
 
 const ITEM_HEIGHT = 24;
-const IMAGE_ROW_MIN_HEIGHT = 48;
-const IMAGE_ROW_MAX_HEIGHT = 68;
-const IMAGE_PREVIEW_MAX_WIDTH = 520;
+const IMAGE_ROW_HEIGHT = 60;
 const IMAGE_PREVIEW_MAX_HEIGHT = 56;
 const DIVIDER_HEIGHT = 7;
-
-function parseImageDimensions(title: string): { width: number; height: number } | null {
-  const match = title.match(/Image\s+(\d+)\s*[×x]\s*(\d+)/i);
-  if (!match) return null;
-
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return null;
-  }
-
-  return { width, height };
-}
 
 function getItemHeight(item: HistoryItem): number {
   if (item.content_type !== "image" || !item.thumbnail) {
     return ITEM_HEIGHT;
   }
 
-  const dimensions = parseImageDimensions(item.title);
-  if (!dimensions) {
-    return 72;
-  }
-
-  const previewHeight = getImagePreviewSize(dimensions).height;
-  return Math.min(IMAGE_ROW_MAX_HEIGHT, Math.max(IMAGE_ROW_MIN_HEIGHT, previewHeight + 12));
-}
-
-function getImagePreviewSize(dimensions: { width: number; height: number }) {
-  const scale = Math.min(
-    IMAGE_PREVIEW_MAX_WIDTH / dimensions.width,
-    IMAGE_PREVIEW_MAX_HEIGHT / dimensions.height
-  );
-
-  return {
-    width: Math.max(1, Math.round(dimensions.width * scale)),
-    height: Math.max(1, Math.round(dimensions.height * scale)),
-  };
+  return IMAGE_ROW_HEIGHT;
 }
 
 /** Highlight matching substring in text (case-insensitive) */
@@ -199,7 +166,8 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                       <img
                         src={`data:image/png;base64,${item.thumbnail}`}
                         alt={translate(language, "history.imageAlt")}
-                        className="block max-h-[56px] max-w-full rounded-sm object-contain object-left"
+                        className="block max-w-full rounded-sm object-contain object-left"
+                        style={{ maxHeight: IMAGE_PREVIEW_MAX_HEIGHT }}
                       />
                     </div>
                   ) : item.content_type === "file" ? (
