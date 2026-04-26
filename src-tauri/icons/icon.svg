@@ -1,6 +1,6 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
-  <rect x="36" y="36" width="952" height="952" rx="200" stroke="white" stroke-opacity="0.18" stroke-width="24"/>
-  <path d="M326 440c54 0 98-54 98-121S380 198 326 198s-98 54-98 121 44 121 98 121Zm186-58c62 0 112-63 112-141S574 100 512 100 400 163 400 241s50 141 112 141Zm186 58c54 0 98-54 98-121s-44-121-98-121-98 54-98 121 44 121 98 121ZM512 884c206 0 360-86 360-204 0-82-75-129-146-174-61-40-101-116-214-116s-153 76-214 116c-71 45-146 92-146 174 0 118 154 204 360 204Z" fill="white" fill-opacity="0.93"/>
-  <defs><linearGradient id="bg" x1="90" y1="60" x2="934" y2="964" gradientUnits="userSpaceOnUse"><stop stop-color="#B88CFF"/><stop offset="0.55" stop-color="#5C39A6"/><stop offset="1" stop-color="#1C1C30"/></linearGradient></defs>
+  <rect x="44" y="44" width="936" height="936" rx="190" stroke="white" stroke-opacity="0.16" stroke-width="22"/>
+  <path d="M370 426c42 0 76-42 76-94s-34-94-76-94-76 42-76 94 34 94 76 94Zm144-45c48 0 87-49 87-109s-39-109-87-109-87 49-87 109 39 109 87 109Zm144 45c42 0 76-42 76-94s-34-94-76-94-76 42-76 94 34 94 76 94ZM514 771c160 0 279-67 279-158 0-64-58-100-113-135-47-31-78-90-166-90s-119 59-166 90c-55 35-113 71-113 135 0 91 119 158 279 158Z" fill="white" fill-opacity="0.93"/>
+  <defs><linearGradient id="bg" x1="90" y1="60" x2="934" y2="964" gradientUnits="userSpaceOnUse"><stop stop-color="#B88CFF"/><stop offset="0.55" stop-color="#5A3AAC"/><stop offset="1" stop-color="#221E3A"/></linearGradient></defs>
 </svg>

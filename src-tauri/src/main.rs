@@ -20,11 +20,15 @@ use tauri::{
     SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
 };
 
-const TRAY_ID: &str = "paw-menu-bar";
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
 /// Timestamp (ms since epoch) when do_show was last called.
 /// hide_window command won't hide if called within 600ms of show.
 static LAST_SHOWN_MS: AtomicU64 = AtomicU64::new(0);
+static TRAY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+struct MenuBarTrayState {
+    current_id: Option<String>,
+}
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -181,17 +185,32 @@ fn handle_tray_event(app: &AppHandle, event: SystemTrayEvent) {
     }
 }
 
-fn build_system_tray(app: &AppHandle, hide_tray_menu_actions: bool) -> Result<(), String> {
+fn build_system_tray(app: &AppHandle, hide_tray_menu_actions: bool) -> Result<String, String> {
+    let tray_id = format!(
+        "paw-menu-bar-{}",
+        TRAY_SEQUENCE.fetch_add(1, Ordering::SeqCst)
+    );
     let app_handle = app.clone();
     SystemTray::new()
-        .with_id(TRAY_ID)
+        .with_id(&tray_id)
         .with_menu(build_tray_menu(hide_tray_menu_actions))
         .on_event(move |event| {
             handle_tray_event(&app_handle, event);
         })
         .build(app)
-        .map(|_| ())
+        .map(|_| tray_id)
         .map_err(|e| e.to_string())
+}
+
+fn current_tray_id(app: &AppHandle) -> Option<String> {
+    app.try_state::<Mutex<MenuBarTrayState>>()
+        .and_then(|state| state.lock().unwrap().current_id.clone())
+}
+
+fn set_current_tray_id(app: &AppHandle, tray_id: Option<String>) {
+    if let Some(state) = app.try_state::<Mutex<MenuBarTrayState>>() {
+        state.lock().unwrap().current_id = tray_id;
+    }
 }
 
 fn apply_menu_bar_icon_visibility(
@@ -199,13 +218,32 @@ fn apply_menu_bar_icon_visibility(
     visible: bool,
     hide_tray_menu_actions: bool,
 ) -> Result<(), String> {
-    match (visible, app.tray_handle_by_id(TRAY_ID)) {
-        (true, Some(handle)) => handle
-            .set_menu(build_tray_menu(hide_tray_menu_actions))
-            .map_err(|e| e.to_string()),
-        (true, None) => build_system_tray(app, hide_tray_menu_actions),
-        (false, Some(handle)) => handle.destroy().map_err(|e| e.to_string()),
-        (false, None) => Ok(()),
+    let tray_id = current_tray_id(app);
+    let tray_handle = tray_id.as_deref().and_then(|id| app.tray_handle_by_id(id));
+
+    match (visible, tray_handle) {
+        (true, Some(handle)) => {
+            handle
+                .set_menu(build_tray_menu(hide_tray_menu_actions))
+                .map_err(|e| e.to_string())?;
+            #[cfg(target_os = "macos")]
+            handle.set_icon_as_template(true).map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        (true, None) => {
+            let new_tray_id = build_system_tray(app, hide_tray_menu_actions)?;
+            set_current_tray_id(app, Some(new_tray_id));
+            Ok(())
+        }
+        (false, Some(handle)) => {
+            handle.destroy().map_err(|e| e.to_string())?;
+            set_current_tray_id(app, None);
+            Ok(())
+        }
+        (false, None) => {
+            set_current_tray_id(app, None);
+            Ok(())
+        }
     }
 }
 
@@ -224,6 +262,21 @@ fn hide_dock_icon() {
 
 #[cfg(not(target_os = "macos"))]
 fn hide_dock_icon() {}
+
+#[cfg(target_os = "macos")]
+fn schedule_hide_dock_icon(app: &AppHandle) {
+    hide_dock_icon();
+    let _ = app.run_on_main_thread(hide_dock_icon);
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(750));
+        let _ = app.run_on_main_thread(hide_dock_icon);
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn schedule_hide_dock_icon(_app: &AppHandle) {}
 
 #[tauri::command]
 fn quit_app() {
@@ -631,8 +684,9 @@ fn main() {
 
     tauri::Builder::default()
         .setup(move |app| {
-            hide_dock_icon();
+            schedule_hide_dock_icon(&app.handle());
             app.manage(config.clone());
+            app.manage(Mutex::new(MenuBarTrayState { current_id: None }));
 
             let db = Arc::new(Database::new().expect("Failed to initialize database"));
             app.manage(db.clone());
@@ -663,8 +717,9 @@ fn main() {
             app.manage(monitor);
 
             if show_menu_bar_icon {
-                build_system_tray(&app.handle(), hide_tray_menu_actions)
+                let tray_id = build_system_tray(&app.handle(), hide_tray_menu_actions)
                     .expect("Failed to create menu bar icon");
+                set_current_tray_id(&app.handle(), Some(tray_id));
             }
 
             let app_handle = app.handle().clone();
