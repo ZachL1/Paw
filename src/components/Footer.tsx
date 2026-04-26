@@ -1,4 +1,5 @@
 import { isMac } from "../utils/platform";
+import { translate, type ResolvedLanguage } from "../i18n";
 
 interface FooterProps {
   itemCount: number;
@@ -6,6 +7,7 @@ interface FooterProps {
   onOpenSettings: () => void;
   onOpenAbout: () => void;
   onQuit: () => void;
+  language: ResolvedLanguage;
 }
 
 function Footer({
@@ -14,6 +16,7 @@ function Footer({
   onOpenSettings,
   onOpenAbout,
   onQuit,
+  language,
 }: FooterProps) {
   const mod = isMac ? "⌥" : "Alt+";
   const clearShortcut = isMac ? "⌥⌫" : "Alt+Delete";
@@ -23,9 +26,9 @@ function Footer({
   return (
     <div className="border-t border-white/10 px-2.5 py-1 text-[10px] text-white/25">
       <div className="flex items-center justify-between">
-        <span>{itemCount} items</span>
+        <span>{translate(language, "footer.items", { count: itemCount })}</span>
         <span>
-          ↑↓ nav · → preview · ← close · ↵ paste · {mod}P pin
+          {translate(language, "footer.hints", { mod })}
         </span>
       </div>
 
@@ -36,7 +39,7 @@ function Footer({
           disabled={itemCount === 0}
           className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:text-white/20"
         >
-          <span>Clear</span>
+          <span>{translate(language, "footer.clear")}</span>
           <span className="text-white/30 text-xs">{clearShortcut}</span>
         </button>
 
@@ -45,7 +48,7 @@ function Footer({
           onClick={onOpenSettings}
           className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
-          <span>Preferences…</span>
+          <span>{translate(language, "footer.preferences")}</span>
           <span className="text-white/30 text-xs">{settingsShortcut}</span>
         </button>
 
@@ -54,7 +57,7 @@ function Footer({
           onClick={onOpenAbout}
           className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
-          <span>About</span>
+          <span>{translate(language, "footer.about")}</span>
           <span className="text-white/0 text-xs">·</span>
         </button>
 
@@ -63,7 +66,7 @@ function Footer({
           onClick={onQuit}
           className="group flex w-full items-center justify-between rounded px-1 py-0.5 text-left text-[13px] leading-tight text-white/80 transition-colors hover:bg-white/5"
         >
-          <span>Quit</span>
+          <span>{translate(language, "footer.quit")}</span>
           <span className="text-white/30 text-xs">{quitShortcut}</span>
         </button>
       </div>

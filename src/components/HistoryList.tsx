@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { HistoryItem } from "../App";
 import { isMac, isLinux } from "../utils/platform";
+import { translate, type ResolvedLanguage } from "../i18n";
 
 interface HistoryListProps {
   items: HistoryItem[];
@@ -11,12 +12,14 @@ interface HistoryListProps {
   onTogglePin: (id: number) => void;
   onHover?: (index: number) => void;
   searchQuery?: string;
+  language: ResolvedLanguage;
 }
 
 const ITEM_HEIGHT = 24;
 const IMAGE_ROW_MIN_HEIGHT = 54;
-const IMAGE_ROW_MAX_HEIGHT = 118;
-const IMAGE_ROW_WIDTH = 340;
+const IMAGE_ROW_MAX_HEIGHT = 172;
+const IMAGE_PREVIEW_MAX_WIDTH = 520;
+const IMAGE_PREVIEW_MAX_HEIGHT = 160;
 const DIVIDER_HEIGHT = 7;
 
 function parseImageDimensions(title: string): { width: number; height: number } | null {
@@ -42,8 +45,20 @@ function getItemHeight(item: HistoryItem): number {
     return 72;
   }
 
-  const previewHeight = Math.round((IMAGE_ROW_WIDTH * dimensions.height) / dimensions.width);
+  const previewHeight = getImagePreviewSize(dimensions).height;
   return Math.min(IMAGE_ROW_MAX_HEIGHT, Math.max(IMAGE_ROW_MIN_HEIGHT, previewHeight + 12));
+}
+
+function getImagePreviewSize(dimensions: { width: number; height: number }) {
+  const scale = Math.min(
+    IMAGE_PREVIEW_MAX_WIDTH / dimensions.width,
+    IMAGE_PREVIEW_MAX_HEIGHT / dimensions.height
+  );
+
+  return {
+    width: Math.max(1, Math.round(dimensions.width * scale)),
+    height: Math.max(1, Math.round(dimensions.height * scale)),
+  };
 }
 
 /** Highlight matching substring in text (case-insensitive) */
@@ -67,7 +82,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 }
 
 const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
-  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover, searchQuery }, ref) => {
+  ({ items, selectedIndex, onSelect, onDelete, onTogglePin, onHover, searchQuery, language }, ref) => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const pinnedCount = useMemo(
@@ -111,8 +126,8 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
           className="flex-1 flex items-center justify-center text-white/30 text-sm"
         >
           <div className="text-center">
-            <div>No clipboard history</div>
-            <div className="text-xs mt-1">Copy something to get started</div>
+            <div>{translate(language, "history.empty.title")}</div>
+            <div className="text-xs mt-1">{translate(language, "history.empty.subtitle")}</div>
           </div>
         </div>
       );
@@ -137,6 +152,8 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
             const item = items[index];
             const showDivider = pinnedCount > 0 && index === pinnedCount;
             const isImage = item.content_type === "image" && Boolean(item.thumbnail);
+            const imageDimensions = isImage ? parseImageDimensions(item.title) : null;
+            const imagePreviewSize = imageDimensions ? getImagePreviewSize(imageDimensions) : null;
             const currentUnpinnedIndex = unpinnedIndices.get(index) ?? -1;
             const shortcutNum =
               currentUnpinnedIndex >= 0 && currentUnpinnedIndex < 9
@@ -183,8 +200,12 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                     <div className="min-w-0 flex-1 overflow-hidden pr-12">
                       <img
                         src={`data:image/png;base64,${item.thumbnail}`}
-                        alt="clipboard image"
-                        className="block max-h-28 max-w-full rounded-sm object-contain object-left"
+                        alt={translate(language, "history.imageAlt")}
+                        className="block max-w-full rounded-sm object-contain object-left"
+                        style={{
+                          width: imagePreviewSize?.width,
+                          height: imagePreviewSize?.height,
+                        }}
                       />
                     </div>
                   ) : item.content_type === "file" ? (
@@ -214,6 +235,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                       e.stopPropagation();
                       onDelete(item.id);
                     }}
+                    aria-label={translate(language, "history.delete")}
                     className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/0 group-hover:text-white/30 hover:!text-red-400 text-[10px] transition-colors leading-none"
                   >
                     ✕

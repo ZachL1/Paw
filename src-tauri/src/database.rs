@@ -167,21 +167,28 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let images = {
             let mut stmt = conn.prepare(
-                "SELECT id, content_blob FROM history_items
+                "SELECT id, content_blob, thumbnail FROM history_items
                  WHERE content_type = 'image'
                    AND content_blob IS NOT NULL
-                   AND (thumbnail IS NULL OR length(thumbnail) < 4096)
                  ORDER BY last_copied_at DESC
                  LIMIT 200",
             )?;
             let images = stmt.query_map([], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
             images
         };
 
-        for (id, blob) in images {
+        for (id, blob, thumbnail) in images {
+            if !thumbnail_needs_refresh(thumbnail.as_deref()) {
+                continue;
+            }
+
             if let Some(thumbnail) = generate_thumbnail_base64(&blob) {
                 conn.execute(
                     "UPDATE history_items SET thumbnail = ?1 WHERE id = ?2",
@@ -424,4 +431,22 @@ fn generate_thumbnail_base64(png_bytes: &[u8]) -> Option<String> {
         .ok()?;
 
     Some(BASE64.encode(&buf))
+}
+
+fn thumbnail_needs_refresh(thumbnail: Option<&str>) -> bool {
+    let Some(thumbnail) = thumbnail else {
+        return true;
+    };
+
+    let Ok(bytes) = BASE64.decode(thumbnail) else {
+        return true;
+    };
+
+    let Ok(img) = image::load_from_memory(&bytes) else {
+        return true;
+    };
+
+    let width = img.width();
+    let height = img.height();
+    width < 180 && height < 90
 }

@@ -14,6 +14,7 @@ import SettingsView from "./components/SettingsView";
 import Footer from "./components/Footer";
 import AboutDialog from "./components/AboutDialog";
 import PreviewPanel from "./components/PreviewPanel";
+import { resolveLanguage, translate, type LanguagePreference } from "./i18n";
 
 export interface HistoryItem {
   id: number;
@@ -40,6 +41,7 @@ export interface AppConfig {
   hide_tray_menu_actions: boolean;
   show_menu_bar_icon: boolean;
   preview_delay_ms: number;
+  language: LanguagePreference;
 }
 
 type PreviewPlacement = "left" | "right";
@@ -90,6 +92,8 @@ function App() {
   const [contentWidth, setContentWidth] = useState(400);
   const [previewWidth, setPreviewWidth] = useState(DEFAULT_PREVIEW_WIDTH);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [languagePreference, setLanguagePreference] =
+    useState<LanguagePreference>("system");
 
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,6 +111,7 @@ function App() {
   const contentCacheRef = useRef<Map<number, string>>(new Map());
   const searchRequestIdRef = useRef(0);
   const appConfigRef = useRef<AppConfig | null>(null);
+  const language = resolveLanguage(languagePreference);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -566,6 +571,7 @@ function App() {
     void listen("config-changed", () => {
       invoke<AppConfig>("get_config").then((cfg) => {
         appConfigRef.current = cfg;
+        setLanguagePreference(cfg.language);
       }).catch(console.error);
     }).then(() => {});
 
@@ -600,6 +606,7 @@ function App() {
   useEffect(() => {
     invoke<AppConfig>("get_config").then((cfg) => {
       appConfigRef.current = cfg;
+      setLanguagePreference(cfg.language);
     }).catch(console.error);
   }, []);
 
@@ -909,7 +916,7 @@ function App() {
       className="flex flex-col flex-1 min-h-0 shrink-0"
       style={{ width: contentWidth }}
     >
-      <SearchBar query={query} onQueryChange={setQuery} />
+      <SearchBar query={query} onQueryChange={setQuery} language={language} />
       <HistoryList
         ref={listRef}
         items={filteredItems}
@@ -919,6 +926,7 @@ function App() {
         onTogglePin={handleTogglePin}
         onHover={handleHover}
         searchQuery={query}
+        language={language}
       />
       <Footer
         itemCount={filteredItems.length}
@@ -926,6 +934,7 @@ function App() {
         onOpenSettings={openSettings}
         onOpenAbout={openAbout}
         onQuit={quitApp}
+        language={language}
       />
     </div>
   );
@@ -944,6 +953,7 @@ function App() {
         content={previewContent}
         loading={previewLoading}
         placement={previewPlacement}
+        language={language}
       />
     </div>
   );
@@ -970,6 +980,7 @@ function App() {
           // Reload config after settings close
           invoke<AppConfig>("get_config").then((cfg) => {
             appConfigRef.current = cfg;
+            setLanguagePreference(cfg.language);
           }).catch(console.error);
         }} />
       ) : (
@@ -983,26 +994,26 @@ function App() {
       )}
 
       {showAbout && (
-        <AboutDialog onClose={() => setShowAbout(false)} />
+        <AboutDialog onClose={() => setShowAbout(false)} language={language} />
       )}
 
       {/* Clear All confirmation overlay */}
       {showClearConfirm && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-lg">
           <div className="bg-[#1e1e2e] border border-white/15 rounded-lg px-5 py-4 max-w-[280px] text-center shadow-xl">
-            <p className="text-white/80 text-sm mb-3">Clear all unpinned items?</p>
+            <p className="text-white/80 text-sm mb-3">{translate(language, "clearConfirm.title")}</p>
             <div className="flex gap-2 justify-center">
               <button
                 onClick={() => setShowClearConfirm(false)}
                 className="text-white/50 hover:text-white/80 text-xs px-3 py-1.5 rounded border border-white/10 transition-colors"
               >
-                Cancel
+                {translate(language, "settings.cancel")}
               </button>
               <button
                 onClick={confirmClearAll}
                 className="bg-red-500/80 hover:bg-red-500 text-white text-xs px-3 py-1.5 rounded transition-colors"
               >
-                Clear
+                {translate(language, "footer.clear")}
               </button>
             </div>
           </div>

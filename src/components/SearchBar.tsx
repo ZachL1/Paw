@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import pawMark from "../assets/paw-mark.svg";
+import { translate, type ResolvedLanguage } from "../i18n";
 
 interface SearchBarProps {
   query: string;
   onQueryChange: (query: string) => void;
+  language: ResolvedLanguage;
 }
 
-function SearchBar({ query, onQueryChange }: SearchBarProps) {
+function SearchBar({ query, onQueryChange, language }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,7 +55,7 @@ function SearchBar({ query, onQueryChange }: SearchBarProps) {
             type="text"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Type to search..."
+            placeholder={translate(language, "search.placeholder")}
             className="w-full bg-white/5 text-white text-[13px] placeholder-white/30
                        pl-7 pr-7 py-0.5 rounded-md border border-white/10
                        focus:outline-none focus:border-blue-400/50 focus:bg-white/8
@@ -63,7 +65,7 @@ function SearchBar({ query, onQueryChange }: SearchBarProps) {
             <button
               onClick={() => onQueryChange("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-              aria-label="Clear search"
+              aria-label={translate(language, "search.clear")}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

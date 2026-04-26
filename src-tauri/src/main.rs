@@ -472,6 +472,8 @@ fn save_config(
         autostart::set_autostart(new_config.launch_at_startup)?;
     }
 
+    let _ = app.emit_all("config-changed", ());
+
     Ok(())
 }
 
@@ -504,6 +506,7 @@ fn set_hide_tray_menu_actions(
         config.show_menu_bar_icon
     };
     apply_menu_bar_icon_visibility(&app, show_menu_bar_icon, hide_tray_menu_actions)?;
+    let _ = app.emit_all("config-changed", ());
 
     Ok(())
 }
@@ -538,6 +541,8 @@ fn set_menu_bar_icon_visible(
         let _ = config.save();
         return Err(e);
     }
+
+    let _ = app.emit_all("config-changed", ());
 
     Ok(())
 }

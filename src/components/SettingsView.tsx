@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { isMac } from "../utils/platform";
 import type { AppConfig } from "../App";
+import { resolveLanguage, translate, type LanguagePreference, type ResolvedLanguage } from "../i18n";
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -56,9 +57,11 @@ function formatHotkey(hotkey: string): string {
 function HotkeyRecorder({
   value,
   onChange,
+  language,
 }: {
   value: string;
   onChange: (hotkey: string) => void;
+  language: ResolvedLanguage;
 }) {
   const [recording, setRecording] = useState(false);
   const [preview, setPreview] = useState<string>("");
@@ -134,16 +137,16 @@ function HotkeyRecorder({
         <>
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
           <span className="flex-1 font-mono">
-            {preview || "Press shortcut…"}
+            {preview || translate(language, "settings.pressShortcut")}
           </span>
-          <span className="text-white/30 text-xs">Esc to cancel</span>
+          <span className="text-white/30 text-xs">{translate(language, "settings.escCancel")}</span>
         </>
       ) : (
         <>
           <span className="flex-1 font-mono tracking-wide">
-            {value ? formatHotkey(value) : <span className="text-white/30">Click to record</span>}
+            {value ? formatHotkey(value) : <span className="text-white/30">{translate(language, "settings.clickRecord")}</span>}
           </span>
-          <span className="text-white/30 text-xs">click to change</span>
+          <span className="text-white/30 text-xs">{translate(language, "settings.clickChange")}</span>
         </>
       )}
     </div>
@@ -230,21 +233,23 @@ function SettingsView({ onClose }: SettingsViewProps) {
   if (!config) {
     return (
       <div className="flex items-center justify-center h-full text-white/40 text-sm">
-        Loading...
+        {translate(resolveLanguage("system"), "settings.loading")}
       </div>
     );
   }
+
+  const language = resolveLanguage(config.language);
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-        <h2 className="text-white/90 text-sm font-semibold">⚙ Settings</h2>
+        <h2 className="text-white/90 text-sm font-semibold">⚙ {translate(language, "settings.title")}</h2>
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/80 text-xs transition-colors"
         >
-          ✕ Close
+          ✕ {translate(language, "settings.close")}
         </button>
       </div>
 
@@ -253,14 +258,30 @@ function SettingsView({ onClose }: SettingsViewProps) {
         {/* General */}
         <section>
           <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-            General
+            {translate(language, "settings.general")}
           </h3>
 
           <label className="block mb-3">
-            <span className="text-white/70 text-xs">Global Hotkey</span>
+            <span className="text-white/70 text-xs">{translate(language, "settings.language")}</span>
+            <select
+              value={config.language}
+              onChange={(e) =>
+                setConfig({ ...config, language: e.target.value as LanguagePreference })
+              }
+              className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
+            >
+              <option value="system">{translate(language, "settings.language.system")}</option>
+              <option value="en">{translate(language, "settings.language.en")}</option>
+              <option value="zh-CN">{translate(language, "settings.language.zhCN")}</option>
+            </select>
+          </label>
+
+          <label className="block mb-3">
+            <span className="text-white/70 text-xs">{translate(language, "settings.hotkey")}</span>
             <HotkeyRecorder
               value={config.hotkey}
               onChange={(hotkey) => setConfig({ ...config, hotkey })}
+              language={language}
             />
           </label>
 
@@ -274,7 +295,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
               className="rounded accent-blue-500"
             />
             <span className="text-white/70 text-xs">
-              Paste on select (simulate {isMac ? "⌘V" : "Ctrl+V"})
+              {translate(language, "settings.pasteOnSelect", { shortcut: isMac ? "⌘V" : "Ctrl+V" })}
             </span>
           </label>
 
@@ -288,7 +309,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
               className="rounded accent-blue-500"
             />
             <span className="text-white/70 text-xs">
-              Launch at system startup
+              {translate(language, "settings.launchStartup")}
             </span>
           </label>
 
@@ -308,7 +329,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
               className="rounded accent-blue-500"
             />
             <span className="text-white/70 text-xs">
-              Hide tray menu actions
+              {translate(language, "settings.hideTrayMenuActions")}
             </span>
           </label>
 
@@ -329,7 +350,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
                 className="rounded accent-blue-500"
               />
               <span className="text-white/70 text-xs">
-                Show icon in menu bar
+                {translate(language, "settings.showMenuBarIcon")}
               </span>
             </label>
           )}
@@ -338,11 +359,11 @@ function SettingsView({ onClose }: SettingsViewProps) {
         {/* Storage */}
         <section>
           <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-            Storage
+            {translate(language, "settings.storage")}
           </h3>
 
           <label className="block mb-3">
-            <span className="text-white/70 text-xs">Max history items</span>
+            <span className="text-white/70 text-xs">{translate(language, "settings.maxHistory")}</span>
             <input
               type="number"
               value={config.max_history}
@@ -360,7 +381,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
 
           <label className="block mb-3">
             <span className="text-white/70 text-xs">
-              Auto-clear after (days, empty = never)
+               {translate(language, "settings.autoClear")}
             </span>
             <input
               type="number"
@@ -374,7 +395,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
                 })
               }
               min={1}
-              placeholder="Never"
+              placeholder={translate(language, "settings.never")}
               className="mt-1 w-full bg-white/5 text-white text-sm px-3 py-1.5 rounded border border-white/10 focus:outline-none focus:border-blue-400/50"
             />
           </label>
@@ -383,7 +404,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
         {/* Appearance */}
         <section>
           <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-            Appearance
+            {translate(language, "settings.appearance")}
           </h3>
 
           <label className="flex items-center gap-2 mb-2">
@@ -395,7 +416,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
               }
               className="rounded accent-blue-500"
             />
-            <span className="text-white/70 text-xs">Show source app</span>
+            <span className="text-white/70 text-xs">{translate(language, "settings.showSourceApp")}</span>
           </label>
 
           <label className="flex items-center gap-2 mb-2">
@@ -407,19 +428,19 @@ function SettingsView({ onClose }: SettingsViewProps) {
               }
               className="rounded accent-blue-500"
             />
-            <span className="text-white/70 text-xs">Show copy count</span>
+            <span className="text-white/70 text-xs">{translate(language, "settings.showCopyCount")}</span>
           </label>
         </section>
 
         {/* Advanced */}
         <section>
           <h3 className="text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-            Advanced
+            {translate(language, "settings.advanced")}
           </h3>
 
           <label className="block mb-3">
             <span className="text-white/70 text-xs">
-              Clipboard poll interval (ms)
+              {translate(language, "settings.pollInterval")}
             </span>
             <input
               type="number"
@@ -439,7 +460,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
 
           <label className="block mb-3">
             <span className="text-white/70 text-xs">
-              Preview delay (ms)
+              {translate(language, "settings.previewDelay")}
             </span>
             <input
               type="number"
@@ -463,7 +484,7 @@ function SettingsView({ onClose }: SettingsViewProps) {
       {/* Footer */}
       <div className="px-4 py-3 border-t border-white/10 flex items-center justify-between">
         <div className="text-xs">
-          {saved && <span className="text-green-400">✓ Saved</span>}
+          {saved && <span className="text-green-400">✓ {translate(language, "settings.saved")}</span>}
           {error && <span className="text-red-400">{error}</span>}
         </div>
         <div className="flex gap-2">
@@ -471,13 +492,13 @@ function SettingsView({ onClose }: SettingsViewProps) {
             onClick={onClose}
             className="text-white/50 hover:text-white/80 text-xs px-3 py-1.5 rounded border border-white/10 transition-colors"
           >
-            Cancel
+            {translate(language, "settings.cancel")}
           </button>
           <button
             onClick={handleSave}
             className="bg-blue-500/80 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded transition-colors"
           >
-            Save
+            {translate(language, "settings.save")}
           </button>
         </div>
       </div>

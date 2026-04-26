@@ -18,6 +18,8 @@ pub struct AppConfig {
     pub show_menu_bar_icon: bool,
     #[serde(default = "default_preview_delay")]
     pub preview_delay_ms: u64,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 fn default_show_menu_bar_icon() -> bool {
@@ -26,6 +28,10 @@ fn default_show_menu_bar_icon() -> bool {
 
 fn default_preview_delay() -> u64 {
     1500
+}
+
+fn default_language() -> String {
+    "system".to_string()
 }
 
 impl Default for AppConfig {
@@ -42,6 +48,7 @@ impl Default for AppConfig {
             hide_tray_menu_actions: false,
             show_menu_bar_icon: true,
             preview_delay_ms: 1500,
+            language: "system".to_string(),
         }
     }
 }
