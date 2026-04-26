@@ -20,6 +20,7 @@ impl Database {
             conn: Mutex::new(conn),
         };
         db.init_tables()?;
+        db.refresh_image_thumbnails()?;
         Ok(db)
     }
 
@@ -160,6 +161,36 @@ impl Database {
             )?;
             Ok(conn.last_insert_rowid())
         }
+    }
+
+    fn refresh_image_thumbnails(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let conn = self.conn.lock().unwrap();
+        let images = {
+            let mut stmt = conn.prepare(
+                "SELECT id, content_blob FROM history_items
+                 WHERE content_type = 'image'
+                   AND content_blob IS NOT NULL
+                   AND (thumbnail IS NULL OR length(thumbnail) < 4096)
+                 ORDER BY last_copied_at DESC
+                 LIMIT 200",
+            )?;
+            let images = stmt.query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+            images
+        };
+
+        for (id, blob) in images {
+            if let Some(thumbnail) = generate_thumbnail_base64(&blob) {
+                conn.execute(
+                    "UPDATE history_items SET thumbnail = ?1 WHERE id = ?2",
+                    params![thumbnail, id],
+                )?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_all(&self, max_items: usize) -> Result<Vec<HistoryItem>, Box<dyn std::error::Error>> {
@@ -374,7 +405,7 @@ fn truncate_title(s: &str, max_len: usize) -> String {
     title
 }
 
-/// Generate a small thumbnail (max 48px height) as base64 PNG
+/// Generate a list thumbnail that preserves enough detail for inline previews.
 fn generate_thumbnail_base64(png_bytes: &[u8]) -> Option<String> {
     use image::ImageReader;
     use std::io::Cursor;
@@ -385,7 +416,7 @@ fn generate_thumbnail_base64(png_bytes: &[u8]) -> Option<String> {
         .decode()
         .ok()?;
 
-    let thumb = img.thumbnail(64, 48);
+    let thumb = img.thumbnail(520, 160);
     let mut buf = Vec::new();
     let mut cursor = Cursor::new(&mut buf);
     thumb

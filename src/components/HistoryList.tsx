@@ -14,7 +14,37 @@ interface HistoryListProps {
 }
 
 const ITEM_HEIGHT = 24;
+const IMAGE_ROW_MIN_HEIGHT = 54;
+const IMAGE_ROW_MAX_HEIGHT = 118;
+const IMAGE_ROW_WIDTH = 340;
 const DIVIDER_HEIGHT = 7;
+
+function parseImageDimensions(title: string): { width: number; height: number } | null {
+  const match = title.match(/Image\s+(\d+)\s*[×x]\s*(\d+)/i);
+  if (!match) return null;
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return { width, height };
+}
+
+function getItemHeight(item: HistoryItem): number {
+  if (item.content_type !== "image" || !item.thumbnail) {
+    return ITEM_HEIGHT;
+  }
+
+  const dimensions = parseImageDimensions(item.title);
+  if (!dimensions) {
+    return 72;
+  }
+
+  const previewHeight = Math.round((IMAGE_ROW_WIDTH * dimensions.height) / dimensions.width);
+  return Math.min(IMAGE_ROW_MAX_HEIGHT, Math.max(IMAGE_ROW_MIN_HEIGHT, previewHeight + 12));
+}
 
 /** Highlight matching substring in text (case-insensitive) */
 function HighlightedText({ text, query }: { text: string; query: string }) {
@@ -62,7 +92,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
       getScrollElement: () => scrollRef.current,
       estimateSize: (index) => {
         const hasDivider = pinnedCount > 0 && index === pinnedCount;
-        return ITEM_HEIGHT + (hasDivider ? DIVIDER_HEIGHT : 0);
+        return getItemHeight(items[index]) + (hasDivider ? DIVIDER_HEIGHT : 0);
       },
       overscan: 10,
     });
@@ -106,6 +136,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
             const index = virtualRow.index;
             const item = items[index];
             const showDivider = pinnedCount > 0 && index === pinnedCount;
+            const isImage = item.content_type === "image" && Boolean(item.thumbnail);
             const currentUnpinnedIndex = unpinnedIndices.get(index) ?? -1;
             const shortcutNum =
               currentUnpinnedIndex >= 0 && currentUnpinnedIndex < 9
@@ -129,7 +160,8 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                 )}
                 <div
                   className={`
-                    group px-2 py-0.5 mx-1 rounded cursor-pointer flex items-center gap-1.5
+                    group relative px-2 py-0.5 ml-1 mr-0.5 rounded cursor-pointer flex items-center gap-1.5
+                    ${isImage ? "h-[calc(100%-1px)]" : ""}
                     ${isLinux ? "" : "transition-colors duration-100"}
                     ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
                   `}
@@ -147,13 +179,14 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                     </span>
                   )}
 
-                  {/* Thumbnail for images only */}
-                  {item.content_type === "image" && item.thumbnail ? (
-                    <img
-                      src={`data:image/png;base64,${item.thumbnail}`}
-                      alt="clipboard image"
-                      className="w-7 h-5 object-cover rounded flex-shrink-0"
-                    />
+                  {isImage ? (
+                    <div className="min-w-0 flex-1 overflow-hidden pr-12">
+                      <img
+                        src={`data:image/png;base64,${item.thumbnail}`}
+                        alt="clipboard image"
+                        className="block max-h-28 max-w-full rounded-sm object-contain object-left"
+                      />
+                    </div>
                   ) : item.content_type === "file" ? (
                     <span className="text-white/30 text-xs flex-shrink-0 w-4 text-center">
                       📁
@@ -161,13 +194,15 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                   ) : null}
 
                   {/* Title with search highlighting */}
-                  <span className="text-white/90 text-[13px] truncate flex-1 leading-tight">
-                    <HighlightedText text={item.title || "(empty)"} query={searchQuery ?? ""} />
-                  </span>
+                  {!isImage && (
+                    <span className={`text-white/90 text-[13px] truncate flex-1 leading-tight ${shortcutNum !== null ? "pr-12" : "pr-4"}`}>
+                      <HighlightedText text={item.title || "(empty)"} query={searchQuery ?? ""} />
+                    </span>
+                  )}
 
                   {/* Shortcut badge for first 9 unpinned items */}
                   {shortcutNum !== null && (
-                    <span className="text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded flex-shrink-0 leading-none py-[1px]">
+                    <span className="absolute right-7 top-1/2 -translate-y-1/2 text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded leading-none py-[1px]">
                       {isMac ? "⌘" : "Ctrl+"}
                       {shortcutNum}
                     </span>
@@ -179,7 +214,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                       e.stopPropagation();
                       onDelete(item.id);
                     }}
-                    className="text-white/0 group-hover:text-white/30 hover:!text-red-400 text-[10px] flex-shrink-0 transition-colors leading-none"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/0 group-hover:text-white/30 hover:!text-red-400 text-[10px] transition-colors leading-none"
                   >
                     ✕
                   </button>
