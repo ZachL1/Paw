@@ -16,10 +16,10 @@ interface HistoryListProps {
 }
 
 const ITEM_HEIGHT = 24;
-const IMAGE_ROW_MIN_HEIGHT = 54;
-const IMAGE_ROW_MAX_HEIGHT = 172;
+const IMAGE_ROW_MIN_HEIGHT = 48;
+const IMAGE_ROW_MAX_HEIGHT = 68;
 const IMAGE_PREVIEW_MAX_WIDTH = 520;
-const IMAGE_PREVIEW_MAX_HEIGHT = 160;
+const IMAGE_PREVIEW_MAX_HEIGHT = 56;
 const DIVIDER_HEIGHT = 7;
 
 function parseImageDimensions(title: string): { width: number; height: number } | null {
@@ -195,11 +195,11 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                   )}
 
                   {isImage ? (
-                    <div className="min-w-0 flex-1 overflow-hidden pr-12">
+                    <div className="min-w-0 flex-1 overflow-hidden pr-8">
                       <img
                         src={`data:image/png;base64,${item.thumbnail}`}
                         alt={translate(language, "history.imageAlt")}
-                        className="block max-h-40 max-w-full rounded-sm object-contain object-left"
+                        className="block max-h-[56px] max-w-full rounded-sm object-contain object-left"
                       />
                     </div>
                   ) : item.content_type === "file" ? (
@@ -210,14 +210,14 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
 
                   {/* Title with search highlighting */}
                   {!isImage && (
-                    <span className={`text-white/90 text-[13px] truncate flex-1 leading-tight ${shortcutNum !== null ? "pr-12" : "pr-4"}`}>
+                    <span className={`text-white/90 text-[13px] truncate flex-1 leading-tight ${shortcutNum !== null ? "pr-8" : "pr-3"}`}>
                       <HighlightedText text={item.title || "(empty)"} query={searchQuery ?? ""} />
                     </span>
                   )}
 
                   {/* Shortcut badge for first 9 unpinned items */}
                   {shortcutNum !== null && (
-                    <span className="absolute right-7 top-1/2 -translate-y-1/2 text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded leading-none py-[1px]">
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/30 text-[10px] font-mono bg-white/8 px-1 rounded leading-none py-[1px] group-hover:opacity-0">
                       {isMac ? "⌘" : "Ctrl+"}
                       {shortcutNum}
                     </span>
