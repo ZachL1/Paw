@@ -38,6 +38,7 @@ export interface AppConfig {
   show_copy_count: boolean;
   launch_at_startup: boolean;
   hide_tray_menu_actions: boolean;
+  show_menu_bar_icon: boolean;
   preview_delay_ms: number;
 }
 

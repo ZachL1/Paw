@@ -20,6 +20,7 @@ use tauri::{
     SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
 };
 
+const TRAY_ID: &str = "paw-menu-bar";
 static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
 /// Timestamp (ms since epoch) when do_show was last called.
 /// hide_window command won't hide if called within 600ms of show.
@@ -154,6 +155,76 @@ fn build_tray_menu(hide_tray_menu_actions: bool) -> SystemTrayMenu {
     menu
 }
 
+fn handle_tray_event(app: &AppHandle, event: SystemTrayEvent) {
+    match event {
+        SystemTrayEvent::LeftClick { .. } => {
+            toggle_window(app);
+        }
+        SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+            "toggle" => toggle_window(app),
+            "settings" => {
+                do_show(app);
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.emit("show-settings", ());
+                }
+            }
+            "about" => {
+                do_show(app);
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.emit("show-about", ());
+                }
+            }
+            "quit" => quit_app(),
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+fn build_system_tray(app: &AppHandle, hide_tray_menu_actions: bool) -> Result<(), String> {
+    let app_handle = app.clone();
+    SystemTray::new()
+        .with_id(TRAY_ID)
+        .with_menu(build_tray_menu(hide_tray_menu_actions))
+        .on_event(move |event| {
+            handle_tray_event(&app_handle, event);
+        })
+        .build(app)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+fn apply_menu_bar_icon_visibility(
+    app: &AppHandle,
+    visible: bool,
+    hide_tray_menu_actions: bool,
+) -> Result<(), String> {
+    match (visible, app.tray_handle_by_id(TRAY_ID)) {
+        (true, Some(handle)) => handle
+            .set_menu(build_tray_menu(hide_tray_menu_actions))
+            .map_err(|e| e.to_string()),
+        (true, None) => build_system_tray(app, hide_tray_menu_actions),
+        (false, Some(handle)) => handle.destroy().map_err(|e| e.to_string()),
+        (false, None) => Ok(()),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn hide_dock_icon() {
+    use objc::{class, msg_send, sel, sel_impl};
+    use objc::runtime::Object;
+
+    unsafe {
+        let app: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+        if !app.is_null() {
+            let _: bool = msg_send![app, setActivationPolicy: 1usize];
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn hide_dock_icon() {}
+
 #[tauri::command]
 fn quit_app() {
     std::process::exit(0);
@@ -286,12 +357,13 @@ fn save_config(
     app: AppHandle,
     state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
 ) -> Result<(), String> {
-    let (old_hotkey, old_autostart, old_hide_tray_menu_actions) = {
+    let (old_hotkey, old_autostart, old_hide_tray_menu_actions, old_show_menu_bar_icon) = {
         let config = state.lock().unwrap();
         (
             config.hotkey.clone(),
             config.launch_at_startup,
             config.hide_tray_menu_actions,
+            config.show_menu_bar_icon,
         )
     };
     let hotkey_changed = old_hotkey != new_config.hotkey;
@@ -331,11 +403,15 @@ fn save_config(
         monitor.update_config(new_config.poll_interval_ms);
     }
 
-    // Update tray menu before autostart so a startup failure doesn't leave the tray stale.
-    if old_hide_tray_menu_actions != new_config.hide_tray_menu_actions {
-        app.tray_handle()
-            .set_menu(build_tray_menu(new_config.hide_tray_menu_actions))
-            .map_err(|e| e.to_string())?;
+    // Update menu bar icon before autostart so a startup failure doesn't leave the menu stale.
+    if old_hide_tray_menu_actions != new_config.hide_tray_menu_actions
+        || old_show_menu_bar_icon != new_config.show_menu_bar_icon
+    {
+        apply_menu_bar_icon_visibility(
+            &app,
+            new_config.show_menu_bar_icon,
+            new_config.hide_tray_menu_actions,
+        )?;
     }
 
     // Apply autostart if changed
@@ -370,9 +446,45 @@ fn set_hide_tray_menu_actions(
         }
     }
 
-    app.tray_handle()
-        .set_menu(build_tray_menu(hide_tray_menu_actions))
-        .map_err(|e| e.to_string())?;
+    let show_menu_bar_icon = {
+        let config = state.lock().unwrap();
+        config.show_menu_bar_icon
+    };
+    apply_menu_bar_icon_visibility(&app, show_menu_bar_icon, hide_tray_menu_actions)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn set_menu_bar_icon_visible(
+    visible: bool,
+    app: AppHandle,
+    state: tauri::State<'_, Arc<Mutex<AppConfig>>>,
+) -> Result<(), String> {
+    let (old_visible, hide_tray_menu_actions) = {
+        let config = state.lock().unwrap();
+        (config.show_menu_bar_icon, config.hide_tray_menu_actions)
+    };
+
+    if old_visible == visible {
+        return Ok(());
+    }
+
+    {
+        let mut config = state.lock().unwrap();
+        config.show_menu_bar_icon = visible;
+        if let Err(e) = config.save() {
+            config.show_menu_bar_icon = old_visible;
+            return Err(e.to_string());
+        }
+    }
+
+    if let Err(e) = apply_menu_bar_icon_visibility(&app, visible, hide_tray_menu_actions) {
+        let mut config = state.lock().unwrap();
+        config.show_menu_bar_icon = old_visible;
+        let _ = config.save();
+        return Err(e);
+    }
 
     Ok(())
 }
@@ -515,39 +627,11 @@ fn main() {
 
     let config = Arc::new(Mutex::new(AppConfig::load()));
 
-    let tray_menu = build_tray_menu(config.lock().unwrap().hide_tray_menu_actions);
-    let tray = SystemTray::new().with_menu(tray_menu);
-
     let hotkey = config.lock().unwrap().hotkey.clone();
 
     tauri::Builder::default()
-        .system_tray(tray)
-        .on_system_tray_event(|app, event| match event {
-            SystemTrayEvent::LeftClick { .. } => {
-                toggle_window(app);
-            }
-            SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
-                "toggle" => toggle_window(app),
-                "settings" => {
-                    // Use do_show so WINDOW_VISIBLE and LAST_SHOWN_MS are properly set.
-                    // Without this, do_hide sees WINDOW_VISIBLE=false and refuses to hide.
-                    do_show(app);
-                    if let Some(window) = app.get_window("main") {
-                        let _ = window.emit("show-settings", ());
-                    }
-                }
-                "about" => {
-                    do_show(app);
-                    if let Some(window) = app.get_window("main") {
-                        let _ = window.emit("show-about", ());
-                    }
-                }
-                "quit" => quit_app(),
-                _ => {}
-            },
-            _ => {}
-        })
         .setup(move |app| {
+            hide_dock_icon();
             app.manage(config.clone());
 
             let db = Arc::new(Database::new().expect("Failed to initialize database"));
@@ -571,15 +655,17 @@ fn main() {
             let cfg = config.lock().unwrap();
             let poll_ms = cfg.poll_interval_ms;
             let hide_tray_menu_actions = cfg.hide_tray_menu_actions;
+            let show_menu_bar_icon = cfg.show_menu_bar_icon;
             drop(cfg);
             monitor.start(db, move |item| {
                 let _ = app_handle.emit_all("clipboard-changed", item);
             }, poll_ms);
             app.manage(monitor);
 
-            app.tray_handle()
-                .set_menu(build_tray_menu(hide_tray_menu_actions))
-                .expect("Failed to update tray menu");
+            if show_menu_bar_icon {
+                build_system_tray(&app.handle(), hide_tray_menu_actions)
+                    .expect("Failed to create menu bar icon");
+            }
 
             let app_handle = app.handle().clone();
             app.global_shortcut_manager()
@@ -602,6 +688,7 @@ fn main() {
             get_config,
             save_config,
             set_hide_tray_menu_actions,
+            set_menu_bar_icon_visible,
             hide_window,
             quit_app,
         ])

@@ -14,8 +14,14 @@ pub struct AppConfig {
     pub launch_at_startup: bool,
     #[serde(default)]
     pub hide_tray_menu_actions: bool,
+    #[serde(default = "default_show_menu_bar_icon")]
+    pub show_menu_bar_icon: bool,
     #[serde(default = "default_preview_delay")]
     pub preview_delay_ms: u64,
+}
+
+fn default_show_menu_bar_icon() -> bool {
+    true
 }
 
 fn default_preview_delay() -> u64 {
@@ -34,6 +40,7 @@ impl Default for AppConfig {
             show_copy_count: true,
             launch_at_startup: false,
             hide_tray_menu_actions: false,
+            show_menu_bar_icon: true,
             preview_delay_ms: 1500,
         }
     }

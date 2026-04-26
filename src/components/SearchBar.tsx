@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import pawMark from "../assets/paw-mark.svg";
 
 interface SearchBarProps {
   query: string;
@@ -28,8 +29,9 @@ function SearchBar({ query, onQueryChange }: SearchBarProps) {
       <div className="flex items-center gap-1.5">
         <div
           data-tauri-drag-region
-          className="shrink-0 cursor-move px-0.5 text-[15px] font-semibold leading-none text-white/60 select-none"
+          className="shrink-0 cursor-move px-0.5 text-[15px] font-semibold leading-none text-white/60 select-none flex items-center gap-1"
         >
+          <img src={pawMark} alt="" className="h-4 w-4 opacity-80" />
           Paw
         </div>
         <div className="relative flex-1">

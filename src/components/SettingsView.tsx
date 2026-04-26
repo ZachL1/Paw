@@ -206,6 +206,22 @@ function SettingsView({ onClose }: SettingsViewProps) {
       });
   }, [markSaved]);
 
+  const persistMenuBarIconVisibility = useCallback((visible: boolean) => {
+    trayMenuVisibilitySaveChain.current = trayMenuVisibilitySaveChain.current
+      .catch(() => undefined)
+      .then(() =>
+        invoke("set_menu_bar_icon_visible", {
+          visible,
+        })
+      )
+      .then(() => {
+        markSaved();
+      })
+      .catch((e) => {
+        setError(String(e));
+      });
+  }, [markSaved]);
+
   const handleSave = useCallback(async () => {
     if (!config) return;
     await persistConfig(config);
@@ -295,6 +311,28 @@ function SettingsView({ onClose }: SettingsViewProps) {
               Hide tray menu actions
             </span>
           </label>
+
+          {isMac && (
+            <label className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                checked={config.show_menu_bar_icon}
+                onChange={(e) => {
+                  const visible = e.target.checked;
+                  const nextConfig = {
+                    ...config,
+                    show_menu_bar_icon: visible,
+                  };
+                  setConfig(nextConfig);
+                  persistMenuBarIconVisibility(visible);
+                }}
+                className="rounded accent-blue-500"
+              />
+              <span className="text-white/70 text-xs">
+                Show icon in menu bar
+              </span>
+            </label>
+          )}
         </section>
 
         {/* Storage */}

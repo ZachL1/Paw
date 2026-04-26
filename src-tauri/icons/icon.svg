@@ -1,20 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f172a"/>
-      <stop offset="100%" style="stop-color:#1e293b"/>
-    </linearGradient>
-  </defs>
-  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#bg)"/>
-  <!-- Abstract: single fluid brushstroke forming a paw shape -->
-  <path d="M 160 340 Q 140 280, 160 240 Q 180 200, 220 220 Q 240 180, 256 160 Q 272 180, 290 220 Q 330 200, 350 240 Q 370 280, 350 340 Q 310 380, 256 390 Q 200 380, 160 340 Z" 
-    fill="none" stroke="#f97316" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Fluid inner dots — abstract beans -->
-  <circle cx="200" cy="260" r="16" fill="#f97316" opacity="0.7"/>
-  <circle cx="256" cy="245" r="18" fill="#fb923c" opacity="0.6"/>
-  <circle cx="312" cy="260" r="16" fill="#f97316" opacity="0.7"/>
-  <circle cx="256" cy="330" r="28" fill="#fdba74" opacity="0.5"/>
-  <!-- Ripple emanating from paw -->
-  <circle cx="256" cy="300" r="130" fill="none" stroke="#f97316" stroke-width="1.5" opacity="0.1"/>
-  <circle cx="256" cy="300" r="170" fill="none" stroke="#f97316" stroke-width="1" opacity="0.06"/>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect x="36" y="36" width="952" height="952" rx="200" stroke="white" stroke-opacity="0.18" stroke-width="24"/>
+  <path d="M326 440c54 0 98-54 98-121S380 198 326 198s-98 54-98 121 44 121 98 121Zm186-58c62 0 112-63 112-141S574 100 512 100 400 163 400 241s50 141 112 141Zm186 58c54 0 98-54 98-121s-44-121-98-121-98 54-98 121 44 121 98 121ZM512 884c206 0 360-86 360-204 0-82-75-129-146-174-61-40-101-116-214-116s-153 76-214 116c-71 45-146 92-146 174 0 118 154 204 360 204Z" fill="white" fill-opacity="0.93"/>
+  <defs><linearGradient id="bg" x1="90" y1="60" x2="934" y2="964" gradientUnits="userSpaceOnUse"><stop stop-color="#B88CFF"/><stop offset="0.55" stop-color="#5C39A6"/><stop offset="1" stop-color="#1C1C30"/></linearGradient></defs>
 </svg>
