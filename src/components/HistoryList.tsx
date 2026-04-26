@@ -152,8 +152,6 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
             const item = items[index];
             const showDivider = pinnedCount > 0 && index === pinnedCount;
             const isImage = item.content_type === "image" && Boolean(item.thumbnail);
-            const imageDimensions = isImage ? parseImageDimensions(item.title) : null;
-            const imagePreviewSize = imageDimensions ? getImagePreviewSize(imageDimensions) : null;
             const currentUnpinnedIndex = unpinnedIndices.get(index) ?? -1;
             const shortcutNum =
               currentUnpinnedIndex >= 0 && currentUnpinnedIndex < 9
@@ -201,11 +199,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                       <img
                         src={`data:image/png;base64,${item.thumbnail}`}
                         alt={translate(language, "history.imageAlt")}
-                        className="block max-w-full rounded-sm object-contain object-left"
-                        style={{
-                          width: imagePreviewSize?.width,
-                          height: imagePreviewSize?.height,
-                        }}
+                        className="block max-h-40 max-w-full rounded-sm object-contain object-left"
                       />
                     </div>
                   ) : item.content_type === "file" ? (

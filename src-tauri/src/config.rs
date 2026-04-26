@@ -12,7 +12,7 @@ pub struct AppConfig {
     pub show_copy_count: bool,
     #[serde(default)]
     pub launch_at_startup: bool,
-    #[serde(default)]
+    #[serde(default = "default_hide_tray_menu_actions")]
     pub hide_tray_menu_actions: bool,
     #[serde(default = "default_show_menu_bar_icon")]
     pub show_menu_bar_icon: bool,
@@ -24,6 +24,10 @@ pub struct AppConfig {
 
 fn default_show_menu_bar_icon() -> bool {
     true
+}
+
+fn default_hide_tray_menu_actions() -> bool {
+    false
 }
 
 fn default_preview_delay() -> u64 {
