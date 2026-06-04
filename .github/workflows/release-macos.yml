@@ -49,6 +49,12 @@ jobs:
         if: ${{ steps.tag.outputs.tag != '' }}
         run: npm run tauri build -- --bundles app
 
+      - name: Ad-hoc sign macOS app bundle
+        if: ${{ steps.tag.outputs.tag != '' }}
+        run: |
+          codesign --force --deep --sign - src-tauri/target/release/bundle/macos/Paw.app
+          codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Paw.app
+
       - name: Package .app as tar.gz
         if: ${{ steps.tag.outputs.tag != '' }}
         run: |
