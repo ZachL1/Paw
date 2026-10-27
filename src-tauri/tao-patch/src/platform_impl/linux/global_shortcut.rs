@@ -61,9 +61,23 @@ impl ShortcutManager {
           #[allow(clippy::uninit_assumed_init)]
           let mut event: xlib::XEvent = std::mem::MaybeUninit::uninit().assume_init();
 
+          let x_fd = (xlib.XConnectionNumber)(display);
+
           loop {
             let event_loop_channel = event_loop_channel.clone();
-            if (xlib.XPending)(display) > 0 {
+
+            // Block until the X connection delivers an event (or the tick
+            // expires, which only exists so registration messages on
+            // thread_receiver are noticed). poll() instead of sleep() makes
+            // hotkey activation immediate instead of up to one tick late.
+            let mut fds = [libc::pollfd {
+              fd: x_fd,
+              events: libc::POLLIN,
+              revents: 0,
+            }];
+            unsafe { (libc::poll)(fds.as_mut_ptr(), 1, 50) };
+
+            while (xlib.XPending)(display) > 0 {
               (xlib.XNextEvent)(display, &mut event);
               if let xlib::KeyRelease = event.get_type() {
                 let keycode = event.key.keycode;
@@ -162,8 +176,6 @@ impl ShortcutManager {
               }
               _ => unreachable!("other message should not arrive"),
             };
-
-            std::thread::sleep(std::time::Duration::from_millis(50));
           }
         }
       });
