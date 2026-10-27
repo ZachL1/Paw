@@ -32,7 +32,7 @@
       "shortDescription": "Cross-platform clipboard manager",
       "longDescription": "A lightweight clipboard manager inspired by Maccy, with global hotkey, search, and keyboard-first navigation.",
       "deb": {
-        "depends": ["libwebkit2gtk-4.0-37", "libgtk-3-0", "xdotool"]
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "xdotool"]
       },
       "icon": [
         "icons/32x32.png",
