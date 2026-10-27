@@ -18,7 +18,8 @@ interface HistoryListProps {
 const ITEM_HEIGHT = 24;
 const IMAGE_ROW_HEIGHT = 60;
 const IMAGE_PREVIEW_MAX_HEIGHT = 56;
-const DIVIDER_HEIGHT = 7;
+// .section-divider is 1px tall with 4px margins on each side.
+const DIVIDER_HEIGHT = 9;
 
 function getItemHeight(item: HistoryItem): number {
   if (item.content_type !== "image" || !item.thumbnail) {
@@ -72,6 +73,12 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
     const virtualizer = useVirtualizer({
       count: items.length,
       getScrollElement: () => scrollRef.current,
+      // Key measurements by item id: merges that shift rows without changing
+      // count (re-copied item moved to top, paste reorder, tail trim at
+      // max_history) must not reuse sizes/positions measured for the items
+      // that previously occupied those indexes. The inline closure identity
+      // makes the virtualizer rebuild measurements whenever items change.
+      getItemKey: (index) => items[index].id,
       estimateSize: (index) => {
         const hasDivider = pinnedCount > 0 && index === pinnedCount;
         return getItemHeight(items[index]) + (hasDivider ? DIVIDER_HEIGHT : 0);
@@ -143,7 +150,7 @@ const HistoryList = forwardRef<HTMLDivElement, HistoryListProps>(
                 <div
                   className={`
                     group relative px-2 py-0.5 ml-1 mr-0.5 rounded cursor-pointer flex items-center gap-1.5
-                    ${isImage ? "h-[calc(100%-1px)]" : ""}
+                    ${isImage ? (showDivider ? "h-[calc(100%-10px)]" : "h-[calc(100%-1px)]") : ""}
                     ${isLinux ? "" : "transition-colors duration-100"}
                     ${index === selectedIndex ? "item-selected" : "hover:bg-white/5"}
                   `}
