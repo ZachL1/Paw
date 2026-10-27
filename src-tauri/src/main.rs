@@ -289,7 +289,8 @@ fn get_history(
     config: tauri::State<'_, Arc<Mutex<AppConfig>>>,
 ) -> Result<Vec<HistoryItem>, String> {
     let max = config.lock().unwrap().max_history;
-    state.get_all(max).map_err(|e| e.to_string())
+    let items = state.get_all(max).map_err(|e| e.to_string())?;
+    Ok(items)
 }
 
 #[tauri::command]

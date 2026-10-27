@@ -50,6 +50,7 @@ const DEFAULT_PREVIEW_WIDTH = 400;
 const MIN_CONTENT_WIDTH = 340;
 const MIN_PREVIEW_WIDTH = 220;
 const WINDOW_ANIMATION_MS = 180;
+const SEARCH_DEBOUNCE_MS = 150;
 
 function buildDisplayTitle(item: HistoryItem, maxLength = 200): string {
   if (item.title.trim().length > 0) {
@@ -437,33 +438,27 @@ function App() {
       }
 
       try {
-        if (item.content_type === "image") {
-          const cached = contentCacheRef.current.get(item.id);
-          if (cached) {
-            setPreviewContent(cached);
-            setPreviewLoading(false);
-            return;
-          }
-
-          setPreviewContent(null);
-          setPreviewLoading(true);
-
-          const fullContent = await invoke<string>("get_item_content", {
-            id: item.id,
-          });
-          if (previewRequestIdRef.current !== requestId) {
-            return;
-          }
-
-          contentCacheRef.current.set(item.id, fullContent);
-          setPreviewContent(fullContent);
+        // Full content is fetched lazily: list payloads carry truncated text
+        // and a thumbnail only.
+        const cached = contentCacheRef.current.get(item.id);
+        if (cached) {
+          setPreviewContent(cached);
           setPreviewLoading(false);
           return;
         }
 
-        const textContent = item.content ?? item.title;
-        contentCacheRef.current.set(item.id, textContent);
-        setPreviewContent(textContent);
+        setPreviewContent(null);
+        setPreviewLoading(true);
+
+        const fullContent = await invoke<string>("get_item_content", {
+          id: item.id,
+        });
+        if (previewRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        contentCacheRef.current.set(item.id, fullContent);
+        setPreviewContent(fullContent);
         setPreviewLoading(false);
       } catch (e) {
         if (previewRequestIdRef.current === requestId) {
@@ -542,15 +537,15 @@ function App() {
       focusGuardUntil = Date.now() + 600;
       // Close settings synchronously so a subsequent show-settings event
       // (emitted right after window-shown by the tray Settings handler) can
-      // re-open them reliably, regardless of async loadHistory timing.
+      // re-open them reliably.
       setShowSettings(false);
       setShowAbout(false);
-      void (async () => {
-        await loadHistory();
-        setQuery("");
-        setSelectedIndex(0);
-        await closePreview();
-      })();
+      // History state is kept fresh by incremental clipboard-changed merges;
+      // a full reload here would ship the whole history over IPC on every
+      // hotkey press and make wake-up visibly slow.
+      setQuery("");
+      setSelectedIndex(0);
+      void closePreview();
     }).then((fn) => {
       unlistenShown = fn;
     });
@@ -620,28 +615,38 @@ function App() {
       return;
     }
 
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
-    void (async () => {
-      try {
-        const results = await invoke<HistoryItem[]>("search_history", { query });
-        if (searchRequestIdRef.current !== requestId) {
-          return;
+    // Debounce: each search is an IPC round trip; skip work per keystroke.
+    const timer = setTimeout(() => {
+      const requestId = searchRequestIdRef.current + 1;
+      searchRequestIdRef.current = requestId;
+      void (async () => {
+        try {
+          const results = await invoke<HistoryItem[]>("search_history", { query });
+          if (searchRequestIdRef.current !== requestId) {
+            return;
+          }
+          // search_history omits thumbnails to keep the payload small;
+          // results come from the same window get_history loaded, so
+          // hydrate them here instead.
+          const thumbs = new Map(items.map((i) => [i.id, i.thumbnail]));
+          setFilteredItems(
+            results.map((item) => ({
+              ...item,
+              thumbnail: thumbs.get(item.id) ?? null,
+              title: buildDisplayTitle(item),
+            }))
+          );
+        } catch (e) {
+          if (searchRequestIdRef.current !== requestId) {
+            return;
+          }
+          console.error("Search failed:", e);
+          setFilteredItems(items);
         }
-        setFilteredItems(
-          results.map((item) => ({
-            ...item,
-            title: buildDisplayTitle(item),
-          }))
-        );
-      } catch (e) {
-        if (searchRequestIdRef.current !== requestId) {
-          return;
-        }
-        console.error("Search failed:", e);
-        setFilteredItems(items);
-      }
-    })();
+      })();
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
   }, [query, items]);
 
   filteredItemsRef.current = filteredItems;
@@ -677,6 +682,19 @@ function App() {
         } else {
           await invoke("copy_item", { id: item.id });
         }
+        // Mirror the backend touch_item (bump copy count, move to top) so the
+        // list is ordered correctly without a full history reload.
+        setItems((prev) => {
+          const updated = { ...item, copy_count: item.copy_count + 1 };
+          const rest = prev.filter((i) => i.id !== item.id);
+          const pinned = rest.filter((i) => i.is_pinned);
+          const unpinned = rest.filter((i) => !i.is_pinned);
+          if (updated.is_pinned) {
+            return [updated, ...pinned, ...unpinned];
+          }
+          const maxHistory = appConfigRef.current?.max_history ?? 1000;
+          return [...pinned, ...[updated, ...unpinned].slice(0, maxHistory)];
+        });
         if (wasOpen) {
           previewOpenRef.current = false;
           await resizeWindowForPreview(false, placement, width);
